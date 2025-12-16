@@ -1,45 +1,46 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { ElContainer, ElHeader, ElMain, ElAside, ElFooter } from 'element-plus'
-import { Menu, Setting, Folder, Message, Document } from '@element-plus/icons-vue'
-import FileExplorer from '../file-explorer/FileExplorer.vue'
-import CodeEditor from '../editor/CodeEditor.vue'
-import ChatPanel from '../chat/ChatPanel.vue'
-import TerminalPanel from '../terminal/TerminalPanel.vue'
-import OutputPanel from '../output/OutputPanel.vue'
-import SettingsPanel from '../settings/SettingsPanel.vue'
-import { useAppStore } from '../../stores/app'
+import { ref, computed } from 'vue';
+import { ElContainer, ElHeader, ElMain, ElAside, ElFooter } from 'element-plus';
+import { Menu, Setting, Folder, Message, Document } from '@element-plus/icons-vue';
+import FileExplorer from '../file-explorer/FileExplorer.vue';
+import CodeEditor from '../editor/CodeEditor.vue';
+import ChatPanel from '../chat/ChatPanel.vue';
+import TerminalPanel from '../terminal/TerminalPanel.vue';
+import OutputPanel from '../output/OutputPanel.vue';
+import SettingsPanel from '../settings/SettingsPanel.vue';
+import { useAppStore } from '../../stores/app';
+import type { el } from 'element-plus/es/locales.mjs';
 
-const appStore = useAppStore()
+const appStore = useAppStore();
 
 // Active tab
-const activeTab = ref('editor')
+const activeTab = ref('editor');
 
 // Panel visibility
-const showFileExplorer = ref(true)
-const showBottomPanel = ref(true)
+const showFileExplorer = ref(true);
+const showBottomPanel = ref(true);
 
 // Bottom panel tabs
 const bottomTabs = [
   { key: 'chat', label: '聊天', icon: Message },
   { key: 'output', label: '输出', icon: Document },
   { key: 'terminal', label: '终端', icon: Message },
-]
+];
 
-const activeBottomTab = ref('chat')
+const activeBottomTab = ref('chat');
 
 // Toggle panels
 function toggleFileExplorer() {
-  showFileExplorer.value = !showFileExplorer.value
+  showFileExplorer.value = !showFileExplorer.value;
 }
 
 function toggleBottomPanel() {
-  showBottomPanel.value = !showBottomPanel.value
+  showBottomPanel.value = !showBottomPanel.value;
 }
 
 // Open settings
 function openSettings() {
-  activeTab.value = 'settings'
+  activeTab.value = 'settings';
 }
 </script>
 
@@ -55,7 +56,7 @@ function openSettings() {
 
         <div class="flex items-center space-x-2">
           <el-button :icon="Menu" text @click="toggleFileExplorer">
-            {{ showFileExplorer ? '隐藏文件' : '显示文件' }}
+            {{ showFileExplorer ? '隐藏导航' : '显示导航' }}
           </el-button>
         </div>
       </div>
@@ -68,10 +69,7 @@ function openSettings() {
           >
             编辑器
           </el-button>
-          <el-button
-            :type="activeTab === 'settings' ? 'primary' : 'default'"
-            @click="openSettings"
-          >
+          <el-button :type="activeTab === 'settings' ? 'primary' : 'default'" @click="openSettings">
             <el-icon><Setting /></el-icon>
             设置
           </el-button>
@@ -82,10 +80,7 @@ function openSettings() {
     <!-- Main Content -->
     <ElContainer class="flex-1">
       <!-- File Explorer Sidebar -->
-      <ElAside
-        v-if="showFileExplorer"
-        class="w-64 border-r border-border bg-surface overflow-auto"
-      >
+      <ElAside v-if="showFileExplorer" class="w-64 border-r border-border bg-surface overflow-auto">
         <FileExplorer />
       </ElAside>
 
@@ -113,7 +108,11 @@ function openSettings() {
                 </el-button>
               </el-button-group>
 
-              <el-button :icon="showBottomPanel ? 'ArrowDown' : 'ArrowUp'" text @click="toggleBottomPanel">
+              <el-button
+                :icon="showBottomPanel ? 'ArrowDown' : 'ArrowUp'"
+                text
+                @click="toggleBottomPanel"
+              >
                 {{ showBottomPanel ? '隐藏面板' : '显示面板' }}
               </el-button>
             </div>

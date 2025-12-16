@@ -32,7 +32,13 @@
       "Bash(tasklist:*)",
       "Bash(git init:*)",
       "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(git commit:*)",
+      "Bash(npm run lint:all)",
+      "Bash(npm run lint)",
+      "Bash(npm run lint:fix:*)",
+      "Bash(npm run format:check)",
+      "Bash(npm run format)",
+      "Bash(npm run stylelint)"
     ]
   }
 }

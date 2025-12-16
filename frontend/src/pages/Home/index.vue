@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { useRouter } from 'vue-router'
-import { ElButton, ElCard } from 'element-plus'
-import {Setting, Document, ChatDotRound } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router';
+import { ElButton, ElCard } from 'element-plus';
+import { Setting, Document, ChatDotRound, Promotion } from '@element-plus/icons-vue';
 
-const router = useRouter()
+const router = useRouter();
 
 const features = [
   {
@@ -21,19 +21,21 @@ const features = [
     title: '灵活配置',
     description: '自定义设置，适应不同开发场景',
   },
-]
+];
 
 function startCoding() {
-  router.push('/dashboard')
+  router.push('/dashboard');
 }
 
 function goToSettings() {
-  router.push('/settings')
+  router.push('/settings');
 }
 </script>
 
 <template>
-  <div class="home-page min-h-screen bg-gradient-to-br from-primary-50 to-primary-100 dark:from-gray-900 dark:to-gray-800">
+  <div
+    class="home-page min-h-screen bg-gradient-to-br from-primary-50 to-primary-100 dark:from-gray-900 dark:to-gray-800"
+  >
     <div class="container mx-auto px-4 py-16">
       <!-- Hero Section -->
       <div class="text-center mb-16">
@@ -45,8 +47,8 @@ function goToSettings() {
         </p>
         <div class="flex justify-center gap-4">
           <ElButton type="primary" size="large" @click="startCoding">
-            <el-icon class="mr-2"><Rocket /></el-icon>
-            开始使用
+            <el-icon class="mr-2"><Promotion /></el-icon>
+            开始编码
           </ElButton>
           <ElButton size="large" @click="goToSettings">
             <el-icon class="mr-2"><Setting /></el-icon>
@@ -56,8 +58,13 @@ function goToSettings() {
       </div>
 
       <!-- Features Grid -->
-      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <ElCard v-for="(feature, index) in features" :key="index" shadow="hover" class="text-center">
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <ElCard
+          v-for="(feature, index) in features"
+          :key="index"
+          shadow="hover"
+          class="text-center"
+        >
           <template #header>
             <div class="flex justify-center">
               <el-icon :size="40" class="text-primary-500">
@@ -78,7 +85,9 @@ function goToSettings() {
           </template>
           <div class="space-y-4">
             <div class="flex items-start gap-4">
-              <div class="flex-shrink-0 w-8 h-8 bg-primary-500 text-white rounded-full flex items-center justify-center font-bold">
+              <div
+                class="flex-shrink-0 w-8 h-8 bg-primary-500 text-white rounded-full flex items-center justify-center font-bold"
+              >
                 1
               </div>
               <div>
@@ -87,7 +96,9 @@ function goToSettings() {
               </div>
             </div>
             <div class="flex items-start gap-4">
-              <div class="flex-shrink-0 w-8 h-8 bg-primary-500 text-white rounded-full flex items-center justify-center font-bold">
+              <div
+                class="flex-shrink-0 w-8 h-8 bg-primary-500 text-white rounded-full flex items-center justify-center font-bold"
+              >
                 2
               </div>
               <div>
@@ -96,7 +107,9 @@ function goToSettings() {
               </div>
             </div>
             <div class="flex items-start gap-4">
-              <div class="flex-shrink-0 w-8 h-8 bg-primary-500 text-white rounded-full flex items-center justify-center font-bold">
+              <div
+                class="flex-shrink-0 w-8 h-8 bg-primary-500 text-white rounded-full flex items-center justify-center font-bold"
+              >
                 3
               </div>
               <div>
