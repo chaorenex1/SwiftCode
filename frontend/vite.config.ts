@@ -1,11 +1,12 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import tailwindcss from '@tailwindcss/vite'
 
 const host = process.env.TAURI_DEV_HOST;
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [vue(), tailwindcss()],
   
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
   // prevent vite from obscuring rust errors
@@ -13,7 +14,7 @@ export default defineConfig({
   // tauri expects a fixed port, fail if that port is not available
   server: {
     // make sure this port matches the devUrl port in tauri.conf.json file
-    port: 5173,
+    port: 5174,
     // Tauri expects a fixed port, fail if that port is not available
     strictPort: true,
     // if the host Tauri is expecting is set, use it

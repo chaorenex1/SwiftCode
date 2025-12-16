@@ -69,7 +69,7 @@ function refreshDirectory() {
 
     <!-- File Tree -->
     <div class="flex-1 overflow-auto p-2">
-      <div v-if="fileStore.isLoading" class="flex-col-center h-full">
+      <div v-if="fileStore.isLoading" class="flex flex-col items-center justify-center h-full">
         <div class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary-500"></div>
         <p class="mt-2 text-sm text-text-secondary">加载中...</p>
       </div>
@@ -97,7 +97,7 @@ function refreshDirectory() {
             <Document v-else />
           </ElIcon>
 
-          <span class="flex-1 text-ellipsis">{{ file.name }}</span>
+          <span class="flex-1 truncate">{{ file.name }}</span>
 
           <div class="opacity-0 group-hover:opacity-100">
             <ElDropdown trigger="click" @command="(command) => handleContextCommand(command, file)">
@@ -120,7 +120,7 @@ function refreshDirectory() {
 
     <!-- Current Path -->
     <div class="border-t border-border bg-surface p-2 text-xs text-text-secondary">
-      <div class="text-ellipsis" :title="fileStore.currentDirectory">
+      <div class="truncate" :title="fileStore.currentDirectory">
         当前目录: {{ fileStore.currentDirectory }}
       </div>
     </div>

@@ -166,7 +166,7 @@ function switchToFile(index: number) {
 
     <!-- Editor Area -->
     <div class="flex-1 overflow-hidden">
-      <div v-if="!fileStore.activeFile" class="flex-col-center h-full text-text-secondary">
+      <div v-if="!fileStore.activeFile" class="flex flex-col items-center justify-center h-full text-text-secondary">
         <ElIcon :size="48" class="mb-4"><Document /></ElIcon>
         <p>打开一个文件开始编辑</p>
       </div>

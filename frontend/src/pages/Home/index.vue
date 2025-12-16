@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElButton, ElCard } from 'element-plus'
 import {Setting, Document, ChatDotRound } from '@element-plus/icons-vue'
