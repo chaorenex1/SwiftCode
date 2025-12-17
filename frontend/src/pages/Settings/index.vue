@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import { useRouter } from 'vue-router';
 import {
   ElButton,
   ElCard,
@@ -13,7 +11,10 @@ import {
   ElMessage,
   ElPageHeader,
 } from 'element-plus';
-import { useAppStore } from '../../stores/app';
+import { ref } from 'vue';
+import { useRouter } from 'vue-router';
+
+import { useAppStore } from '../../stores/workspaceStore';
 
 const router = useRouter();
 const appStore = useAppStore();
@@ -70,9 +71,14 @@ function goBack() {
 <template>
   <div class="settings-page min-h-screen bg-gray-50 dark:bg-gray-900">
     <div class="container mx-auto px-4 py-8">
-      <ElPageHeader class="mb-6" @back="goBack">
+      <ElPageHeader
+        class="mb-6"
+        @back="goBack"
+      >
         <template #content>
-          <h1 class="text-2xl font-bold">设置</h1>
+          <h1 class="text-2xl font-bold">
+            设置
+          </h1>
         </template>
       </ElPageHeader>
 
@@ -80,11 +86,16 @@ function goBack() {
         <!-- 外观设置 -->
         <ElCard>
           <template #header>
-            <h2 class="text-xl font-semibold">外观</h2>
+            <h2 class="text-xl font-semibold">
+              外观
+            </h2>
           </template>
           <ElForm label-width="120px">
             <ElFormItem label="主题">
-              <ElSelect v-model="settings.theme" class="w-full">
+              <ElSelect
+                v-model="settings.theme"
+                class="w-full"
+              >
                 <ElOption
                   v-for="theme in themes"
                   :key="theme.value"
@@ -94,7 +105,10 @@ function goBack() {
               </ElSelect>
             </ElFormItem>
             <ElFormItem label="语言">
-              <ElSelect v-model="settings.language" class="w-full">
+              <ElSelect
+                v-model="settings.language"
+                class="w-full"
+              >
                 <ElOption
                   v-for="lang in languages"
                   :key="lang.value"
@@ -104,8 +118,15 @@ function goBack() {
               </ElSelect>
             </ElFormItem>
             <ElFormItem label="字体大小">
-              <ElInput v-model.number="settings.fontSize" type="number" :min="10" :max="24">
-                <template #append>px</template>
+              <ElInput
+                v-model.number="settings.fontSize"
+                type="number"
+                :min="10"
+                :max="24"
+              >
+                <template #append>
+                  px
+                </template>
               </ElInput>
             </ElFormItem>
           </ElForm>
@@ -114,7 +135,9 @@ function goBack() {
         <!-- 编辑器设置 -->
         <ElCard>
           <template #header>
-            <h2 class="text-xl font-semibold">编辑器</h2>
+            <h2 class="text-xl font-semibold">
+              编辑器
+            </h2>
           </template>
           <ElForm label-width="120px">
             <ElFormItem label="自动保存">
@@ -126,11 +149,16 @@ function goBack() {
         <!-- AI 设置 -->
         <ElCard>
           <template #header>
-            <h2 class="text-xl font-semibold">AI 配置</h2>
+            <h2 class="text-xl font-semibold">
+              AI 配置
+            </h2>
           </template>
           <ElForm label-width="120px">
             <ElFormItem label="AI 模型">
-              <ElSelect v-model="settings.aiModel" class="w-full">
+              <ElSelect
+                v-model="settings.aiModel"
+                class="w-full"
+              >
                 <ElOption
                   v-for="model in aiModels"
                   :key="model.value"
@@ -152,8 +180,15 @@ function goBack() {
 
         <!-- 操作按钮 -->
         <div class="flex justify-end gap-4">
-          <ElButton @click="handleReset">重置为默认</ElButton>
-          <ElButton type="primary" @click="handleSave">保存设置</ElButton>
+          <ElButton @click="handleReset">
+            重置为默认
+          </ElButton>
+          <ElButton
+            type="primary"
+            @click="handleSave"
+          >
+            保存设置
+          </ElButton>
         </div>
       </div>
     </div>

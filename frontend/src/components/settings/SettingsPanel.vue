@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ref } from 'vue';
 import { Folder, Refresh, Plus, Delete, Edit } from '@element-plus/icons-vue';
 import {
   ElForm,
@@ -13,7 +12,9 @@ import {
   ElTableColumn,
   ElDialog,
 } from 'element-plus';
-import { useAppStore } from '../../stores/app';
+import { ref } from 'vue';
+
+import { useAppStore } from '../../stores/workspaceStore';
 
 const appStore = useAppStore();
 
@@ -153,12 +154,17 @@ function browseDirectory() {
   <div class="space-y-6">
     <!-- Workspace Settings -->
     <div class="bg-surface rounded-lg p-6">
-      <h2 class="text-lg font-semibold mb-4">工作区设置</h2>
+      <h2 class="text-lg font-semibold mb-4">
+        工作区设置
+      </h2>
 
       <ElForm label-width="120px">
         <ElFormItem label="当前工作区">
           <div class="flex items-center space-x-2">
-            <ElSelect v-model="appStore.currentWorkspace" style="width: 200px">
+            <ElSelect
+              v-model="appStore.currentWorkspace"
+              style="width: 200px"
+            >
               <ElOption
                 v-for="workspace in appStore.workspaces"
                 :key="workspace.id"
@@ -167,9 +173,19 @@ function browseDirectory() {
               />
             </ElSelect>
 
-            <ElInput v-model="workspaceName" placeholder="新工作区名称" style="width: 200px" />
+            <ElInput
+              v-model="workspaceName"
+              placeholder="新工作区名称"
+              style="width: 200px"
+            />
 
-            <ElButton type="primary" :icon="Plus" @click="createWorkspace"> 新建 </ElButton>
+            <ElButton
+              type="primary"
+              :icon="Plus"
+              @click="createWorkspace"
+            >
+              新建
+            </ElButton>
 
             <ElButton
               v-if="appStore.currentWorkspace !== 'default'"
@@ -184,9 +200,20 @@ function browseDirectory() {
 
         <ElFormItem label="应用数据目录">
           <div class="flex items-center space-x-2">
-            <ElInput v-model="dataDirectory" readonly style="width: 300px" />
-            <ElButton :icon="Folder" @click="browseDirectory"> 浏览... </ElButton>
-            <ElButton :icon="Refresh"> 重置为默认 </ElButton>
+            <ElInput
+              v-model="dataDirectory"
+              readonly
+              style="width: 300px"
+            />
+            <ElButton
+              :icon="Folder"
+              @click="browseDirectory"
+            >
+              浏览...
+            </ElButton>
+            <ElButton :icon="Refresh">
+              重置为默认
+            </ElButton>
           </div>
         </ElFormItem>
       </ElForm>
@@ -194,27 +221,53 @@ function browseDirectory() {
 
     <!-- CLI Tool Paths -->
     <div class="bg-surface rounded-lg p-6">
-      <h2 class="text-lg font-semibold mb-4">CLI 工具路径设置</h2>
+      <h2 class="text-lg font-semibold mb-4">
+        CLI 工具路径设置
+      </h2>
 
       <ElForm label-width="120px">
         <ElFormItem label="Node.js">
           <div class="flex items-center space-x-2">
-            <ElInput v-model="cliPaths.nodejs" style="width: 300px" />
-            <ElButton :icon="Folder" @click="browseDirectory"> 浏览... </ElButton>
+            <ElInput
+              v-model="cliPaths.nodejs"
+              style="width: 300px"
+            />
+            <ElButton
+              :icon="Folder"
+              @click="browseDirectory"
+            >
+              浏览...
+            </ElButton>
           </div>
         </ElFormItem>
 
         <ElFormItem label="Python">
           <div class="flex items-center space-x-2">
-            <ElInput v-model="cliPaths.python" style="width: 300px" />
-            <ElButton :icon="Folder" @click="browseDirectory"> 浏览... </ElButton>
+            <ElInput
+              v-model="cliPaths.python"
+              style="width: 300px"
+            />
+            <ElButton
+              :icon="Folder"
+              @click="browseDirectory"
+            >
+              浏览...
+            </ElButton>
           </div>
         </ElFormItem>
 
         <ElFormItem label="Git">
           <div class="flex items-center space-x-2">
-            <ElInput v-model="cliPaths.git" style="width: 300px" />
-            <ElButton :icon="Folder" @click="browseDirectory"> 浏览... </ElButton>
+            <ElInput
+              v-model="cliPaths.git"
+              style="width: 300px"
+            />
+            <ElButton
+              :icon="Folder"
+              @click="browseDirectory"
+            >
+              浏览...
+            </ElButton>
           </div>
         </ElFormItem>
       </ElForm>
@@ -223,23 +276,46 @@ function browseDirectory() {
     <!-- Environment Variables -->
     <div class="bg-surface rounded-lg p-6">
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold">环境变量设置</h2>
-        <ElButton type="primary" :icon="Plus" @click="showEnvVarDialog = true">
+        <h2 class="text-lg font-semibold">
+          环境变量设置
+        </h2>
+        <ElButton
+          type="primary"
+          :icon="Plus"
+          @click="showEnvVarDialog = true"
+        >
           添加环境变量
         </ElButton>
       </div>
 
-      <ElTable :data="envVars" style="width: 100%">
-        <ElTableColumn prop="name" label="变量名" width="150" />
-        <ElTableColumn prop="value" label="变量值">
+      <ElTable
+        :data="envVars"
+        style="width: 100%"
+      >
+        <ElTableColumn
+          prop="name"
+          label="变量名"
+          width="150"
+        />
+        <ElTableColumn
+          prop="value"
+          label="变量值"
+        >
           <template #default="{ row }">
             <span v-if="row.isSecret">********</span>
             <span v-else>{{ row.value }}</span>
           </template>
         </ElTableColumn>
-        <ElTableColumn label="操作" width="120">
+        <ElTableColumn
+          label="操作"
+          width="120"
+        >
           <template #default="{ $index }">
-            <ElButton size="small" :icon="Edit" text />
+            <ElButton
+              size="small"
+              :icon="Edit"
+              text
+            />
             <ElButton
               size="small"
               type="danger"
@@ -255,23 +331,49 @@ function browseDirectory() {
     <!-- AI Models -->
     <div class="bg-surface rounded-lg p-6">
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold">模型管理</h2>
-        <ElButton type="primary" :icon="Plus" @click="showAiModelDialog = true">
+        <h2 class="text-lg font-semibold">
+          模型管理
+        </h2>
+        <ElButton
+          type="primary"
+          :icon="Plus"
+          @click="showAiModelDialog = true"
+        >
           添加模型
         </ElButton>
       </div>
 
-      <ElTable :data="aiModels" style="width: 100%">
-        <ElTableColumn prop="name" label="模型名称" width="180" />
-        <ElTableColumn prop="endpoint" label="API端点" />
-        <ElTableColumn prop="apiKey" label="API密钥">
+      <ElTable
+        :data="aiModels"
+        style="width: 100%"
+      >
+        <ElTableColumn
+          prop="name"
+          label="模型名称"
+          width="180"
+        />
+        <ElTableColumn
+          prop="endpoint"
+          label="API端点"
+        />
+        <ElTableColumn
+          prop="apiKey"
+          label="API密钥"
+        >
           <template #default="{ row }">
             <span>********</span>
           </template>
         </ElTableColumn>
-        <ElTableColumn label="操作" width="120">
+        <ElTableColumn
+          label="操作"
+          width="120"
+        >
           <template #default="{ $index }">
-            <ElButton size="small" :icon="Edit" text />
+            <ElButton
+              size="small"
+              :icon="Edit"
+              text
+            />
             <ElButton
               size="small"
               type="danger"
@@ -287,19 +389,45 @@ function browseDirectory() {
     <!-- Code CLIs -->
     <div class="bg-surface rounded-lg p-6">
       <div class="flex items-center justify-between mb-4">
-        <h2 class="text-lg font-semibold">Code CLI 管理</h2>
-        <ElButton type="primary" :icon="Plus" @click="showCodeCliDialog = true">
+        <h2 class="text-lg font-semibold">
+          Code CLI 管理
+        </h2>
+        <ElButton
+          type="primary"
+          :icon="Plus"
+          @click="showCodeCliDialog = true"
+        >
           添加 Code CLI
         </ElButton>
       </div>
 
-      <ElTable :data="codeClis" style="width: 100%">
-        <ElTableColumn prop="name" label="CLI名称" width="180" />
-        <ElTableColumn prop="command" label="命令路径" />
-        <ElTableColumn prop="args" label="参数" />
-        <ElTableColumn label="操作" width="120">
+      <ElTable
+        :data="codeClis"
+        style="width: 100%"
+      >
+        <ElTableColumn
+          prop="name"
+          label="CLI名称"
+          width="180"
+        />
+        <ElTableColumn
+          prop="command"
+          label="命令路径"
+        />
+        <ElTableColumn
+          prop="args"
+          label="参数"
+        />
+        <ElTableColumn
+          label="操作"
+          width="120"
+        >
           <template #default="{ $index }">
-            <ElButton size="small" :icon="Edit" text />
+            <ElButton
+              size="small"
+              :icon="Edit"
+              text
+            />
             <ElButton
               size="small"
               type="danger"
@@ -314,13 +442,27 @@ function browseDirectory() {
 
     <!-- Action Buttons -->
     <div class="flex items-center justify-end space-x-4">
-      <ElButton @click="resetSettings"> 恢复默认 </ElButton>
-      <ElButton type="primary" @click="saveSettings"> 保存设置 </ElButton>
+      <ElButton @click="resetSettings">
+        恢复默认
+      </ElButton>
+      <ElButton
+        type="primary"
+        @click="saveSettings"
+      >
+        保存设置
+      </ElButton>
     </div>
 
     <!-- Dialogs -->
-    <ElDialog v-model="showEnvVarDialog" title="添加环境变量" width="500px">
-      <ElForm :model="newEnvVar" label-width="100px">
+    <ElDialog
+      v-model="showEnvVarDialog"
+      title="添加环境变量"
+      width="500px"
+    >
+      <ElForm
+        :model="newEnvVar"
+        label-width="100px"
+      >
         <ElFormItem label="变量名">
           <ElInput v-model="newEnvVar.name" />
         </ElFormItem>
@@ -334,13 +476,23 @@ function browseDirectory() {
       <template #footer>
         <span class="dialog-footer">
           <ElButton @click="showEnvVarDialog = false">取消</ElButton>
-          <ElButton type="primary" @click="addEnvVar">确定</ElButton>
+          <ElButton
+            type="primary"
+            @click="addEnvVar"
+          >确定</ElButton>
         </span>
       </template>
     </ElDialog>
 
-    <ElDialog v-model="showAiModelDialog" title="添加 AI 模型" width="500px">
-      <ElForm :model="newAiModel" label-width="100px">
+    <ElDialog
+      v-model="showAiModelDialog"
+      title="添加 AI 模型"
+      width="500px"
+    >
+      <ElForm
+        :model="newAiModel"
+        label-width="100px"
+      >
         <ElFormItem label="模型名称">
           <ElInput v-model="newAiModel.name" />
         </ElFormItem>
@@ -348,19 +500,33 @@ function browseDirectory() {
           <ElInput v-model="newAiModel.endpoint" />
         </ElFormItem>
         <ElFormItem label="API密钥">
-          <ElInput v-model="newAiModel.apiKey" type="password" show-password />
+          <ElInput
+            v-model="newAiModel.apiKey"
+            type="password"
+            show-password
+          />
         </ElFormItem>
       </ElForm>
       <template #footer>
         <span class="dialog-footer">
           <ElButton @click="showAiModelDialog = false">取消</ElButton>
-          <ElButton type="primary" @click="addAiModel">确定</ElButton>
+          <ElButton
+            type="primary"
+            @click="addAiModel"
+          >确定</ElButton>
         </span>
       </template>
     </ElDialog>
 
-    <ElDialog v-model="showCodeCliDialog" title="添加 Code CLI" width="500px">
-      <ElForm :model="newCodeCli" label-width="100px">
+    <ElDialog
+      v-model="showCodeCliDialog"
+      title="添加 Code CLI"
+      width="500px"
+    >
+      <ElForm
+        :model="newCodeCli"
+        label-width="100px"
+      >
         <ElFormItem label="CLI名称">
           <ElInput v-model="newCodeCli.name" />
         </ElFormItem>
@@ -374,7 +540,10 @@ function browseDirectory() {
       <template #footer>
         <span class="dialog-footer">
           <ElButton @click="showCodeCliDialog = false">取消</ElButton>
-          <ElButton type="primary" @click="addCodeCli">确定</ElButton>
+          <ElButton
+            type="primary"
+            @click="addCodeCli"
+          >确定</ElButton>
         </span>
       </template>
     </ElDialog>

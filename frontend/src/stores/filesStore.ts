@@ -1,6 +1,6 @@
+import { invoke } from '@tauri-apps/api/core';
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
 
 export interface FileItem {
   name: string;

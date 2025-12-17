@@ -77,6 +77,8 @@ fn main() {
             
             // Initialize application core
             core::app::init(app)?;
+            // Initialize logging
+            utils::logging::init_tracing(app)?;
 
             // Initialize database connection
             database::connection::init(app)?;

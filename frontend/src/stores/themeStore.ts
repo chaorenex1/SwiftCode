@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed, watch } from 'vue';
+
 import type { Theme, ColorScheme, ThemeColors } from '@/utils/types';
 
 export const useThemeStore = defineStore('theme', () => {

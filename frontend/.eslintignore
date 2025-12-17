@@ -1,0 +1,35 @@
+# Dependency directories
+node_modules/
+dist/
+build/
+coverage/
+*.min.js
+
+# Editor directories
+.vscode/
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temp files
+*.tmp
+*.temp
+
+# Build artifacts
+*.d.ts
+*.map
+
+# Config files
+.env
+.env.local
+.env.*.local
+
+# Tauri build
+src-tauri/target/
+src-tauri/Cargo.lock

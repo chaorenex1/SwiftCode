@@ -39,7 +39,11 @@
       "Bash(npm run format:check)",
       "Bash(npm run format)",
       "Bash(npm run stylelint)",
-      "Bash(dir:*)"
+      "Bash(dir:*)",
+      "Bash(pnpm lint)",
+      "Bash(pnpm lint:fix)",
+      "Bash(powershell:*)",
+      "Bash(VITE_PORT=5175 pnpm dev)"
     ]
   }
 }

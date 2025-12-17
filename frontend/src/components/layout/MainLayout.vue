@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
-import { ElContainer, ElHeader, ElMain, ElAside, ElFooter } from 'element-plus';
 import { Menu, Setting, Folder, Message, Document } from '@element-plus/icons-vue';
-import FileExplorer from '../file-explorer/FileExplorer.vue';
-import CodeEditor from '../editor/CodeEditor.vue';
+import { ElContainer, ElHeader, ElMain, ElAside, ElFooter } from 'element-plus';
+import { ref, computed } from 'vue';
+
+import { useAppStore } from '../../stores/workspaceStore';
 import ChatPanel from '../chat/ChatPanel.vue';
-import TerminalPanel from '../terminal/TerminalPanel.vue';
+import CodeEditor from '../editor/CodeEditor.vue';
+import FileExplorer from '../file-explorer/FileExplorer.vue';
 import OutputPanel from '../output/OutputPanel.vue';
 import SettingsPanel from '../settings/SettingsPanel.vue';
-import { useAppStore } from '../../stores/app';
+import TerminalPanel from '../terminal/TerminalPanel.vue';
+
 import type { el } from 'element-plus/es/locales.mjs';
 
 const appStore = useAppStore();
@@ -50,12 +52,20 @@ function openSettings() {
     <ElHeader class="flex items-center justify-between border-b border-border bg-surface px-4">
       <div class="flex items-center space-x-4">
         <div class="flex items-center space-x-2">
-          <img src="/vite.svg" class="h-8 w-8" alt="Logo" />
+          <img
+            src="/vite.svg"
+            class="h-8 w-8"
+            alt="Logo"
+          >
           <span class="text-lg font-semibold">Code AI Assistant</span>
         </div>
 
         <div class="flex items-center space-x-2">
-          <el-button :icon="Menu" text @click="toggleFileExplorer">
+          <el-button
+            :icon="Menu"
+            text
+            @click="toggleFileExplorer"
+          >
             {{ showFileExplorer ? '隐藏导航' : '显示导航' }}
           </el-button>
         </div>
@@ -69,7 +79,10 @@ function openSettings() {
           >
             编辑器
           </el-button>
-          <el-button :type="activeTab === 'settings' ? 'primary' : 'default'" @click="openSettings">
+          <el-button
+            :type="activeTab === 'settings' ? 'primary' : 'default'"
+            @click="openSettings"
+          >
             <el-icon><Setting /></el-icon>
             设置
           </el-button>
@@ -80,14 +93,20 @@ function openSettings() {
     <!-- Main Content -->
     <ElContainer class="flex-1">
       <!-- File Explorer Sidebar -->
-      <ElAside v-if="showFileExplorer" class="w-64 border-r border-border bg-surface overflow-auto">
+      <ElAside
+        v-if="showFileExplorer"
+        class="w-64 border-r border-border bg-surface overflow-auto"
+      >
         <FileExplorer />
       </ElAside>
 
       <!-- Main Content Area -->
       <ElMain class="flex-1 overflow-hidden">
         <!-- Editor View -->
-        <div v-if="activeTab === 'editor'" class="h-full flex flex-col">
+        <div
+          v-if="activeTab === 'editor'"
+          class="h-full flex flex-col"
+        >
           <!-- Editor Area -->
           <div class="flex-1 overflow-hidden">
             <CodeEditor />
@@ -119,7 +138,10 @@ function openSettings() {
           </div>
 
           <!-- Bottom Panel -->
-          <div v-if="showBottomPanel" class="h-64 border-t border-border overflow-hidden">
+          <div
+            v-if="showBottomPanel"
+            class="h-64 border-t border-border overflow-hidden"
+          >
             <ChatPanel v-if="activeBottomTab === 'chat'" />
             <OutputPanel v-else-if="activeBottomTab === 'output'" />
             <TerminalPanel v-else-if="activeBottomTab === 'terminal'" />
@@ -127,7 +149,10 @@ function openSettings() {
         </div>
 
         <!-- Settings View -->
-        <div v-else-if="activeTab === 'settings'" class="h-full overflow-auto p-6">
+        <div
+          v-else-if="activeTab === 'settings'"
+          class="h-full overflow-auto p-6"
+        >
           <SettingsPanel />
         </div>
       </ElMain>

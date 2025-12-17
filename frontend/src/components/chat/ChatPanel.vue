@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
 import { Link, Delete, Setting } from '@element-plus/icons-vue';
 import { ElInput, ElButton, ElSelect, ElOption, ElTooltip, ElTag } from 'element-plus';
-import { useAppStore } from '../../stores/app';
-import { useFileStore } from '../../stores/modules/files';
+import { ref, computed } from 'vue';
+
+import { useFileStore } from '../../stores/filesStore';
+import { useAppStore } from '../../stores/workspaceStore';
 
 const appStore = useAppStore();
 const fileStore = useFileStore();
@@ -68,13 +69,27 @@ function handleKeyPress(event: KeyboardEvent | Event) {
 <template>
   <div class="h-full flex flex-col">
     <!-- Associated Files -->
-    <div v-if="associatedFiles.length > 0" class="border-b border-border bg-surface p-2">
+    <div
+      v-if="associatedFiles.length > 0"
+      class="border-b border-border bg-surface p-2"
+    >
       <div class="flex items-center justify-between mb-1">
         <div class="flex items-center text-sm text-text-secondary">
-          <ElIcon :size="14" class="mr-1"><Link /></ElIcon>
+          <ElIcon
+            :size="14"
+            class="mr-1"
+          >
+            <Link />
+          </ElIcon>
           关联文件:
         </div>
-        <ElButton size="small" text @click="associateFile"> 添加当前文件 </ElButton>
+        <ElButton
+          size="small"
+          text
+          @click="associateFile"
+        >
+          添加当前文件
+        </ElButton>
       </div>
       <div class="flex flex-wrap gap-1">
         <ElTag
@@ -91,7 +106,9 @@ function handleKeyPress(event: KeyboardEvent | Event) {
 
     <!-- Chat Messages Area -->
     <div class="flex-1 overflow-auto p-4">
-      <div class="text-center text-text-secondary">聊天功能开发中...</div>
+      <div class="text-center text-text-secondary">
+        聊天功能开发中...
+      </div>
     </div>
 
     <!-- Input Area -->
@@ -118,20 +135,45 @@ function handleKeyPress(event: KeyboardEvent | Event) {
 
           <div class="flex items-center">
             <span class="text-sm text-text-secondary mr-2">Code CLI:</span>
-            <ElSelect size="small" style="width: 140px">
-              <ElOption label="OpenAI Codex" value="codex" />
-              <ElOption label="Local Coder" value="local" />
+            <ElSelect
+              size="small"
+              style="width: 140px"
+            >
+              <ElOption
+                label="OpenAI Codex"
+                value="codex"
+              />
+              <ElOption
+                label="Local Coder"
+                value="local"
+              />
             </ElSelect>
           </div>
         </div>
 
         <div class="flex items-center space-x-2">
-          <ElTooltip content="关联当前文件" placement="bottom">
-            <ElButton :icon="Link" size="small" text @click="associateFile" />
+          <ElTooltip
+            content="关联当前文件"
+            placement="bottom"
+          >
+            <ElButton
+              :icon="Link"
+              size="small"
+              text
+              @click="associateFile"
+            />
           </ElTooltip>
 
-          <ElTooltip content="清空聊天" placement="bottom">
-            <ElButton :icon="Delete" size="small" text @click="clearChat" />
+          <ElTooltip
+            content="清空聊天"
+            placement="bottom"
+          >
+            <ElButton
+              :icon="Delete"
+              size="small"
+              text
+              @click="clearChat"
+            />
           </ElTooltip>
         </div>
       </div>
@@ -148,7 +190,12 @@ function handleKeyPress(event: KeyboardEvent | Event) {
           @keydown="handleKeyPress"
         />
 
-        <ElButton type="primary" :icon="Setting" :loading="isLoading" @click="sendMessage">
+        <ElButton
+          type="primary"
+          :icon="Setting"
+          :loading="isLoading"
+          @click="sendMessage"
+        >
           发送
         </ElButton>
       </div>

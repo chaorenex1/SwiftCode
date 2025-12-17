@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { ElNotification } from 'element-plus';
-import { useAppStore } from './stores/app';
+import { ref, onMounted } from 'vue';
+
+import { useAppStore } from './stores/workspaceStore';
 
 const appStore = useAppStore();
 const isLoading = ref(true);
@@ -105,11 +106,16 @@ async function setupEventListeners() {
 
 <template>
   <div id="app">
-    <div v-if="isLoading" class="flex flex-col items-center justify-center h-full w-full">
+    <div
+      v-if="isLoading"
+      class="flex flex-col items-center justify-center h-full w-full"
+    >
       <div
         class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-primary-500"
-      ></div>
-      <p class="mt-4 text-text-secondary">正在初始化应用...</p>
+      />
+      <p class="mt-4 text-text-secondary">
+        正在初始化应用...
+      </p>
     </div>
 
     <router-view v-else />

@@ -1,9 +1,17 @@
 <script setup lang="ts">
+import { Setting, Document, ChatDotRound, Promotion, Folder } from '@element-plus/icons-vue';
+import { ElButton, ElCard, ElDialog, ElMessage } from 'element-plus';
+import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { ElButton, ElCard } from 'element-plus';
-import { Setting, Document, ChatDotRound, Promotion } from '@element-plus/icons-vue';
 
+import { openFileDialog } from '@/services/tauri/commands';
+import { useFileStore } from '@/stores/filesStore';
 const router = useRouter();
+const fileStore = useFileStore();
+
+const showDirectoryDialog = ref(false);
+const recentDirectories = ref<string[]>([]);
+const isLoading = ref(false);
 
 const features = [
   {
@@ -23,13 +31,69 @@ const features = [
   },
 ];
 
-function startCoding() {
+async function startCoding() {
+  showDirectoryDialog.value = true;
+}
+
+async function selectDirectory() {
+  try {
+    isLoading.value = true;
+    const result = await openFileDialog({
+      directory: true,
+    });
+
+    if (typeof result === 'string' && result) {
+      // 加载目录
+      await fileStore.loadDirectory(result);
+
+      // 保存到最近打开的目录
+      saveRecentDirectory(result);
+
+      // 跳转到dashboard
+      router.push('/dashboard');
+    }
+  } catch (error) {
+    ElMessage.error('选择目录失败: ' + (error as Error).message);
+    console.error('选择目录失败', error);
+  } finally {
+    isLoading.value = false;
+    showDirectoryDialog.value = false;
+  }
+}
+
+function saveRecentDirectory(path: string) {
+  // 从localStorage获取最近目录
+  const recent = JSON.parse(localStorage.getItem('recentDirectories') || '[]');
+
+  // 移除已存在的相同路径
+  const filtered = recent.filter((p: string) => p !== path);
+
+  // 添加到最前面
+  filtered.unshift(path);
+
+  // 限制为5个
+  const limited = filtered.slice(0, 5);
+
+  // 保存回localStorage
+  localStorage.setItem('recentDirectories', JSON.stringify(limited));
+
+  // 更新响应式数据
+  recentDirectories.value = limited;
+}
+
+function loadRecentDirectories() {
+  const recent = JSON.parse(localStorage.getItem('recentDirectories') || '[]');
+  recentDirectories.value = recent.slice(0, 5);
+}
+
+function openRecentDirectory(path: string) {
+  fileStore.loadDirectory(path);
   router.push('/dashboard');
 }
 
-function goToSettings() {
-  router.push('/settings');
-}
+onMounted(() => {
+  loadRecentDirectories();
+});
 </script>
 
 <template>
@@ -46,13 +110,15 @@ function goToSettings() {
           您的智能代码开发助手，让编程更高效、更简单
         </p>
         <div class="flex justify-center gap-4">
-          <ElButton type="primary" size="large" @click="startCoding">
-            <el-icon class="mr-2"><Promotion /></el-icon>
+          <ElButton
+            type="primary"
+            size="large"
+            @click="startCoding"
+          >
+            <el-icon class="mr-2">
+              <Promotion />
+            </el-icon>
             开始编码
-          </ElButton>
-          <ElButton size="large" @click="goToSettings">
-            <el-icon class="mr-2"><Setting /></el-icon>
-            设置
           </ElButton>
         </div>
       </div>
@@ -67,13 +133,84 @@ function goToSettings() {
         >
           <template #header>
             <div class="flex justify-center">
-              <el-icon :size="40" class="text-primary-500">
+              <el-icon
+                :size="40"
+                class="text-primary-500"
+              >
                 <component :is="feature.icon" />
               </el-icon>
             </div>
           </template>
-          <h3 class="text-lg font-semibold mb-2">{{ feature.title }}</h3>
-          <p class="text-gray-600 dark:text-gray-400">{{ feature.description }}</p>
+          <h3 class="text-lg font-semibold mb-2">
+            {{ feature.title }}
+          </h3>
+          <p class="text-gray-600 dark:text-gray-400">
+            {{ feature.description }}
+          </p>
+        </ElCard>
+      </div>
+
+      <!-- Directory Selection Dialog -->
+      <ElDialog
+        v-model="showDirectoryDialog"
+        title="选择工作目录"
+        width="500px"
+        :close-on-click-modal="false"
+      >
+        <div class="py-4">
+          <p class="text-gray-600 dark:text-gray-400 mb-4">
+            请选择一个目录作为您的工作区，AI助手将帮助您处理该目录中的文件。
+          </p>
+          <ElButton
+            type="primary"
+            class="w-full"
+            :loading="isLoading"
+            @click="selectDirectory"
+          >
+            <el-icon class="mr-2">
+              <Folder />
+            </el-icon>
+            选择目录
+          </ElButton>
+        </div>
+      </ElDialog>
+
+      <!-- Recent Directories -->
+      <div
+        v-if="recentDirectories.length > 0"
+        class="mt-16 max-w-3xl mx-auto"
+      >
+        <ElCard>
+          <template #header>
+            <h2 class="text-2xl font-bold text-center">
+              最近打开的目录
+            </h2>
+          </template>
+          <div class="space-y-2">
+            <div
+              v-for="(dir, index) in recentDirectories"
+              :key="index"
+              class="flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded cursor-pointer"
+              @click="openRecentDirectory(dir)"
+            >
+              <div class="flex items-center">
+                <el-icon class="mr-3 text-primary-500">
+                  <Folder />
+                </el-icon>
+                <div>
+                  <div class="font-medium">
+                    {{ dir }}
+                  </div>
+                  <div class="text-sm text-gray-500">
+                    点击打开
+                  </div>
+                </div>
+              </div>
+              <el-icon class="text-gray-400">
+                <Promotion />
+              </el-icon>
+            </div>
+          </div>
         </ElCard>
       </div>
 
@@ -81,7 +218,9 @@ function goToSettings() {
       <div class="mt-16 max-w-3xl mx-auto">
         <ElCard>
           <template #header>
-            <h2 class="text-2xl font-bold text-center">快速开始</h2>
+            <h2 class="text-2xl font-bold text-center">
+              快速开始
+            </h2>
           </template>
           <div class="space-y-4">
             <div class="flex items-start gap-4">
@@ -91,8 +230,12 @@ function goToSettings() {
                 1
               </div>
               <div>
-                <h4 class="font-semibold mb-1">选择工作目录</h4>
-                <p class="text-gray-600 dark:text-gray-400">打开您的项目文件夹开始工作</p>
+                <h4 class="font-semibold mb-1">
+                  选择工作目录
+                </h4>
+                <p class="text-gray-600 dark:text-gray-400">
+                  打开您的项目文件夹开始工作
+                </p>
               </div>
             </div>
             <div class="flex items-start gap-4">
@@ -102,8 +245,12 @@ function goToSettings() {
                 2
               </div>
               <div>
-                <h4 class="font-semibold mb-1">与 AI 对话</h4>
-                <p class="text-gray-600 dark:text-gray-400">描述您的需求，AI 将帮助您生成代码</p>
+                <h4 class="font-semibold mb-1">
+                  与 AI 对话
+                </h4>
+                <p class="text-gray-600 dark:text-gray-400">
+                  描述您的需求，AI 将帮助您生成代码
+                </p>
               </div>
             </div>
             <div class="flex items-start gap-4">
@@ -113,8 +260,12 @@ function goToSettings() {
                 3
               </div>
               <div>
-                <h4 class="font-semibold mb-1">编辑和运行</h4>
-                <p class="text-gray-600 dark:text-gray-400">在编辑器中修改代码并在终端中运行</p>
+                <h4 class="font-semibold mb-1">
+                  编辑和运行
+                </h4>
+                <p class="text-gray-600 dark:text-gray-400">
+                  在编辑器中修改代码并在终端中运行
+                </p>
               </div>
             </div>
           </div>

@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
-import * as monaco from 'monaco-editor';
 import { Document, FolderOpened } from '@element-plus/icons-vue';
 import { ElTabs, ElTabPane, ElButton, ElIcon, ElTooltip } from 'element-plus';
-import { useFileStore } from '../../stores/modules/files';
+import * as monaco from 'monaco-editor';
+import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
+
+import { useFileStore } from '../../stores/filesStore';
 
 const fileStore = useFileStore();
 const editorContainer = ref<HTMLElement>();
@@ -124,11 +125,18 @@ function switchToFile(index: number) {
         @tab-click="(pane: any) => switchToFile(pane.props.name as number)"
         @tab-remove="(name: any) => closeFile(name as number)"
       >
-        <ElTabPane v-for="(file, index) in fileStore.openedFiles" :key="file.path" :name="index">
+        <ElTabPane
+          v-for="(file, index) in fileStore.openedFiles"
+          :key="file.path"
+          :name="index"
+        >
           <template #label>
             <div class="flex items-center">
               <span class="mr-2">{{ file.path.split('/').pop() }}</span>
-              <span v-if="file.modified" class="text-warning">*</span>
+              <span
+                v-if="file.modified"
+                class="text-warning"
+              >*</span>
             </div>
           </template>
         </ElTabPane>
@@ -143,14 +151,30 @@ function switchToFile(index: number) {
         </div>
 
         <div class="flex items-center space-x-2">
-          <ElTooltip content="保存当前文件 (Ctrl+S)" placement="bottom">
-            <ElButton :icon="Document" :loading="isLoading" size="small" @click="saveCurrentFile">
+          <ElTooltip
+            content="保存当前文件 (Ctrl+S)"
+            placement="bottom"
+          >
+            <ElButton
+              :icon="Document"
+              :loading="isLoading"
+              size="small"
+              @click="saveCurrentFile"
+            >
               保存
             </ElButton>
           </ElTooltip>
 
-          <ElTooltip content="保存所有文件 (Ctrl+Shift+S)" placement="bottom">
-            <ElButton :icon="FolderOpened" :loading="isLoading" size="small" @click="saveAllFiles">
+          <ElTooltip
+            content="保存所有文件 (Ctrl+Shift+S)"
+            placement="bottom"
+          >
+            <ElButton
+              :icon="FolderOpened"
+              :loading="isLoading"
+              size="small"
+              @click="saveAllFiles"
+            >
               全部保存
             </ElButton>
           </ElTooltip>
@@ -164,11 +188,20 @@ function switchToFile(index: number) {
         v-if="!fileStore.activeFile"
         class="flex flex-col items-center justify-center h-full text-text-secondary"
       >
-        <ElIcon :size="48" class="mb-4"><Document /></ElIcon>
+        <ElIcon
+          :size="48"
+          class="mb-4"
+        >
+          <Document />
+        </ElIcon>
         <p>打开一个文件开始编辑</p>
       </div>
 
-      <div v-else ref="editorContainer" class="h-full w-full"></div>
+      <div
+        v-else
+        ref="editorContainer"
+        class="h-full w-full"
+      />
     </div>
 
     <!-- Status Bar -->
@@ -182,7 +215,10 @@ function switchToFile(index: number) {
         </div>
 
         <div>
-          <span v-if="fileStore.activeFile?.modified" class="text-warning"> 有未保存的更改 </span>
+          <span
+            v-if="fileStore.activeFile?.modified"
+            class="text-warning"
+          > 有未保存的更改 </span>
         </div>
       </div>
     </div>

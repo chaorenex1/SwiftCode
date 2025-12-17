@@ -2,30 +2,60 @@
 //!
 //! This module handles application logging configuration.
 
-use tracing::{info, Level};
-use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+use tauri::{App, Manager};
 
-/// Initialize application logging
-pub fn init_logging() {
-    // Create a filter that logs info level by default, but can be overridden by RUST_LOG
-    let filter = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+use anyhow::{Context, Result};
+use tracing::Level;
+use std::{fs, path::Path};
+use tracing_subscriber::{
+    fmt,
+    layer::{Layer, SubscriberExt},
+    prelude::*,
+    registry::Registry,
+    util::SubscriberInitExt,
+    EnvFilter,
+};
+use tracing_appender::{non_blocking, rolling::{RollingFileAppender, Rotation}};
 
-    // Configure the tracing subscriber
-    tracing_subscriber::registry()
-        .with(filter)
-        .with(
-            fmt::layer()
-                .with_target(true)
-                .with_level(true)
-                .with_thread_ids(false)
-                .with_thread_names(false)
-                .compact(),
-        )
-        .init();
+pub fn init_tracing(app: &mut App) -> Result<()> {
+    let config = app.state::<crate::config::AppConfig>();
+    let log_config = &config.logging;
 
-    info!("Logging initialized successfully");
+    // let filter_layer = EnvFilter::try_new(log_config.log_level.as_str())?
+    //     .add_directive("h2=warn".parse()?)
+    //     .add_directive("hyper=info".parse()?);
+
+    // // 2. 控制台层
+    // let console_layer = fmt::layer()
+    //     .with_ansi(true)
+    //     .with_timer(fmt::time::LocalTime::rfc_3339());
+    // // 3. 文件层 + 旋转
+    // let path_str = log_config.log_file_path.as_str();
+    // let file_name = log_config.log_file_name.as_str();
+    // let log_dir = Path::new(&path_str);
+    // crate::utils::fs::init_dir(&path_str)?;
+    // let file_appender = RollingFileAppender::builder()  
+    //     .rotation(Rotation::DAILY)  
+    //     .filename_prefix(file_name)
+    //     .filename_suffix("log")
+    //     .max_log_files(log_config.log_file_rotation.log_file_max_backups.try_into().unwrap_or(5))
+    //     .build(log_dir)
+    //     .context("Failed to build file appender")?;
+    // let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
+    // let file_layer = fmt::layer()
+    //     .with_writer(non_blocking)
+    //     .with_ansi(false)
+    //     .with_timer(fmt::time::LocalTime::rfc_3339());
+    // 4. 初始化（链式 with 安全）
+    // Registry::default().with(filter_layer).with(file_layer).with(console_layer).init();
+    tracing::info!(
+        level = log_config.log_level,
+        console = log_config.console,
+        "Tracing initialized successfully"
+    );
+    Ok(())
 }
+
 
 /// Log a message at debug level
 pub fn debug(message: &str) {

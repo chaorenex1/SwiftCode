@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
 import { Folder, Document, Plus, Refresh, Search } from '@element-plus/icons-vue';
 import {
   ElTree,
@@ -10,7 +9,9 @@ import {
   ElDropdownMenu,
   ElDropdownItem,
 } from 'element-plus';
-import { useFileStore } from '../../stores/modules/files';
+import { ref, onMounted } from 'vue';
+
+import { useFileStore } from '../../stores/filesStore';
 
 const fileStore = useFileStore();
 const searchQuery = ref('');
@@ -56,10 +57,29 @@ function refreshDirectory() {
     <div class="border-b border-border bg-surface p-2">
       <div class="flex items-center justify-between mb-2">
         <div class="flex items-center space-x-1">
-          <ElButton :icon="Plus" size="small" text @click="createNew(false)"> 文件 </ElButton>
-          <ElButton :icon="Folder" size="small" text @click="createNew(true)"> 文件夹 </ElButton>
+          <ElButton
+            :icon="Plus"
+            size="small"
+            text
+            @click="createNew(false)"
+          >
+            文件
+          </ElButton>
+          <ElButton
+            :icon="Folder"
+            size="small"
+            text
+            @click="createNew(true)"
+          >
+            文件夹
+          </ElButton>
         </div>
-        <ElButton :icon="Refresh" size="small" text @click="refreshDirectory" />
+        <ElButton
+          :icon="Refresh"
+          size="small"
+          text
+          @click="refreshDirectory"
+        />
       </div>
 
       <ElInput
@@ -73,22 +93,36 @@ function refreshDirectory() {
 
     <!-- File Tree -->
     <div class="flex-1 overflow-auto p-2">
-      <div v-if="fileStore.isLoading" class="flex flex-col items-center justify-center h-full">
+      <div
+        v-if="fileStore.isLoading"
+        class="flex flex-col items-center justify-center h-full"
+      >
         <div
           class="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary-500"
-        ></div>
-        <p class="mt-2 text-sm text-text-secondary">加载中...</p>
+        />
+        <p class="mt-2 text-sm text-text-secondary">
+          加载中...
+        </p>
       </div>
 
-      <div v-else-if="fileStore.error" class="text-center p-4 text-error">
+      <div
+        v-else-if="fileStore.error"
+        class="text-center p-4 text-error"
+      >
         {{ fileStore.error }}
       </div>
 
-      <div v-else-if="fileStore.files.length === 0" class="text-center p-4 text-text-secondary">
+      <div
+        v-else-if="fileStore.files.length === 0"
+        class="text-center p-4 text-text-secondary"
+      >
         目录为空
       </div>
 
-      <div v-else class="space-y-1">
+      <div
+        v-else
+        class="space-y-1"
+      >
         <div
           v-for="file in fileStore.files.filter((f) =>
             searchQuery ? f.name.toLowerCase().includes(searchQuery.toLowerCase()) : true
@@ -98,7 +132,10 @@ function refreshDirectory() {
           @click="handleNodeClick(file)"
           @contextmenu="handleContextMenu($event, file)"
         >
-          <ElIcon :size="16" class="mr-2">
+          <ElIcon
+            :size="16"
+            class="mr-2"
+          >
             <Folder v-if="file.isDirectory" />
             <Document v-else />
           </ElIcon>
@@ -106,18 +143,33 @@ function refreshDirectory() {
           <span class="flex-1 truncate">{{ file.name }}</span>
 
           <div class="opacity-0 group-hover:opacity-100">
-            <ElDropdown trigger="click" @command="(command) => handleContextCommand(command, file)">
+            <ElDropdown
+              trigger="click"
+              @command="(command) => handleContextCommand(command, file)"
+            >
               <span class="el-dropdown-link">
                 <ElIcon :size="14"><More /></ElIcon>
               </span>
               <template #dropdown>
                 <ElDropdownMenu>
-                  <ElDropdownItem command="rename">重命名</ElDropdownItem>
-                  <ElDropdownItem command="delete" divided>删除</ElDropdownItem>
-                  <ElDropdownItem command="copy_path">复制路径</ElDropdownItem>
-                  <ElDropdownItem v-if="file.isDirectory" command="open_terminal"
-                    >在终端打开</ElDropdownItem
+                  <ElDropdownItem command="rename">
+                    重命名
+                  </ElDropdownItem>
+                  <ElDropdownItem
+                    command="delete"
+                    divided
                   >
+                    删除
+                  </ElDropdownItem>
+                  <ElDropdownItem command="copy_path">
+                    复制路径
+                  </ElDropdownItem>
+                  <ElDropdownItem
+                    v-if="file.isDirectory"
+                    command="open_terminal"
+                  >
+                    在终端打开
+                  </ElDropdownItem>
                 </ElDropdownMenu>
               </template>
             </ElDropdown>
@@ -128,7 +180,10 @@ function refreshDirectory() {
 
     <!-- Current Path -->
     <div class="border-t border-border bg-surface p-2 text-xs text-text-secondary">
-      <div class="truncate" :title="fileStore.currentDirectory">
+      <div
+        class="truncate"
+        :title="fileStore.currentDirectory"
+      >
         当前目录: {{ fileStore.currentDirectory }}
       </div>
     </div>

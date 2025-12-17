@@ -5,8 +5,8 @@ description = "A desktop application with code editor, AI chat assistant, CLI ou
 authors = ["chaorenex1 243537608z@gmail.com"]
 license = "apache-2.0"
 edition = "2021"
-repository = ""
-homepage = ""
+repository = "https://github.com/chaorenex1/code-ai-assistant"
+homepage = "https://github.com/chaorenex1/code-ai-assistant"
 readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -21,10 +21,11 @@ serde_json = "1.0"
 tokio = { version = "1.0", features = ["full"] }
 reqwest = { version = "0.12", features = ["json", "default-tls"] }
 anyhow = "1.0"
-thiserror = "1.0"
+thiserror = "2.0.17"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
-config = "0.13"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "local-time"] }
+tracing-appender = "0.2"
+config = "0.15.19"
 clap = { version = "4.0", features = ["derive"] }
 sea-orm = { version = "0.12", features = ["sqlx-sqlite", "runtime-tokio-rustls", "macros"] }
 sqlx = { version = "0.7", features = ["sqlite", "runtime-tokio-rustls"] }

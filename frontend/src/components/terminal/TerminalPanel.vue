@@ -7,7 +7,8 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import '@xterm/xterm/css/xterm.css';
 import { Plus, Close, Refresh } from '@element-plus/icons-vue';
 import { ElTabs, ElTabPane, ElButton, ElSelect, ElOption } from 'element-plus';
-import { useAppStore } from '../../stores/app';
+
+import { useAppStore } from '../../stores/workspaceStore';
 
 const appStore = useAppStore();
 const terminalContainer = ref<HTMLElement>();
@@ -216,9 +217,23 @@ function refreshTerminal() {
         </ElTabs>
 
         <div class="flex items-center space-x-2">
-          <ElButton :icon="Plus" size="small" text @click="createNewTerminal"> 新建 </ElButton>
+          <ElButton
+            :icon="Plus"
+            size="small"
+            text
+            @click="createNewTerminal"
+          >
+            新建
+          </ElButton>
 
-          <ElButton :icon="Refresh" size="small" text @click="refreshTerminal"> 刷新 </ElButton>
+          <ElButton
+            :icon="Refresh"
+            size="small"
+            text
+            @click="refreshTerminal"
+          >
+            刷新
+          </ElButton>
 
           <ElSelect
             v-model="appStore.settings.terminalShell"
@@ -226,17 +241,32 @@ function refreshTerminal() {
             style="width: 100px"
             @change="appStore.setTerminalShell"
           >
-            <ElOption label="bash" value="bash" />
-            <ElOption label="zsh" value="zsh" />
-            <ElOption label="powershell" value="powershell" />
-            <ElOption label="cmd" value="cmd" />
+            <ElOption
+              label="bash"
+              value="bash"
+            />
+            <ElOption
+              label="zsh"
+              value="zsh"
+            />
+            <ElOption
+              label="powershell"
+              value="powershell"
+            />
+            <ElOption
+              label="cmd"
+              value="cmd"
+            />
           </ElSelect>
         </div>
       </div>
     </div>
 
     <!-- Terminal Area -->
-    <div ref="terminalContainer" class="flex-1 overflow-hidden"></div>
+    <div
+      ref="terminalContainer"
+      class="flex-1 overflow-hidden"
+    />
 
     <!-- Status Bar -->
     <div class="border-t border-border bg-surface px-4 py-1 text-xs text-text-secondary">

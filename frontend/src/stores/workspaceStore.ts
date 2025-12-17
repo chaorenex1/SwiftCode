@@ -1,6 +1,7 @@
+import { invoke } from '@tauri-apps/api/core';
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { invoke } from '@tauri-apps/api/core';
+
 import type { UnlistenFn } from '@tauri-apps/api/event';
 
 export interface AppSettings {
