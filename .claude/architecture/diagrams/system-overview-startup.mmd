@@ -1,0 +1,52 @@
+%%{init: {"securityLevel": "loose", "flowchart": {"htmlLabels": true}}}%%
+flowchart TD
+    %% 应用启动流程
+    Start[应用启动] --> LoadConfig[加载配置]
+    LoadConfig --> InitTauri[初始化Tauri]
+    InitTauri --> InitBackend[初始化Rust后端]
+
+    InitBackend --> InitDB[初始化数据库连接]
+    InitBackend --> InitServices[初始化服务层]
+
+    InitDB --> DBReady[数据库就绪]
+    InitServices --> ServicesReady[服务就绪]
+
+    DBReady --> StartFrontend[启动前端Vue应用]
+    ServicesReady --> StartFrontend
+
+    StartFrontend --> MountApp[挂载Vue应用]
+    MountApp --> LoadUI[加载UI组件]
+
+    LoadUI --> InitEditor[初始化代码编辑器]
+    LoadUI --> InitChat[初始化聊天助手]
+    LoadUI --> InitTerminal[初始化终端]
+    LoadUI --> InitOutput[初始化输出面板]
+    LoadUI --> InitExplorer[初始化文件浏览器]
+    LoadUI --> InitSettings[初始化设置面板]
+
+    InitEditor --> EditorReady[编辑器就绪]
+    InitChat --> ChatReady[聊天助手就绪]
+    InitTerminal --> TerminalReady[终端就绪]
+    InitOutput --> OutputReady[输出面板就绪]
+    InitExplorer --> ExplorerReady[文件浏览器就绪]
+    InitSettings --> SettingsReady[设置面板就绪]
+
+    EditorReady --> AppRunning[应用运行中]
+    ChatReady --> AppRunning
+    TerminalReady --> AppRunning
+    OutputReady --> AppRunning
+    ExplorerReady --> AppRunning
+    SettingsReady --> AppRunning
+
+    %% 用户操作流程示例
+    subgraph UserOp[用户操作：编辑并保存文件]
+        UserEdit[用户编辑代码] --> EditorChange[编辑器内容变化]
+        EditorChange --> AutoSaveCheck[自动保存检查]
+        AutoSaveCheck -->|需要保存| SaveFile[保存文件]
+        SaveFile -->|Tauri命令| BackendSave[后端文件保存]
+        BackendSave -->|文件系统| FileSaved[文件保存成功]
+        FileSaved --> UpdateUI[更新UI状态]
+        UpdateUI --> UserNotified[用户收到通知]
+    end
+
+    AppRunning --> UserOp

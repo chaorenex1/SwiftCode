@@ -1,0 +1,203 @@
+%%{init: {"securityLevel": "loose", "flowchart": {"htmlLabels": true}}}%%
+flowchart TB
+    %% 前端组件关系图
+    subgraph Frontend["前端组件层 (Vue 3)"]
+        subgraph Root["根组件"]
+            App[App.vue<br/>应用入口]
+            MainLayout[MainLayout.vue<br/>主布局]
+        end
+
+        subgraph Features["功能组件"]
+            EditorComp[CodeEditor.vue<br/>代码编辑器]
+            ChatComp[ChatPanel.vue<br/>AI聊天助手]
+            TerminalComp[TerminalPanel.vue<br/>终端面板]
+            OutputComp[OutputPanel.vue<br/>输出面板]
+            ExplorerComp[FileExplorer.vue<br/>文件浏览器]
+            SettingsComp[SettingsPanel.vue<br/>设置面板]
+        end
+
+        subgraph Pages["页面组件"]
+            Dashboard[Dashboard/index.vue<br/>仪表板]
+            Home[Home/index.vue<br/>主页]
+            Login[Login/index.vue<br/>登录]
+            SettingsPage[Settings/index.vue<br/>设置页面]
+        end
+
+        subgraph Pinia["状态管理 (Pinia)"]
+            AppStore[app.ts<br/>应用状态]
+            ThemeStore[themeStore.ts<br/>主题状态]
+            UserStore[userStore.ts<br/>用户状态]
+            ChatStore[chat-store.ts<br/>聊天状态]
+            EditorStore[editor-store.ts<br/>编辑器状态]
+            TerminalStore[terminal-store.ts<br/>终端状态]
+        end
+
+        subgraph Services["服务层"]
+            TauriService[tauri/commands.ts<br/>Tauri命令服务]
+            FileService[file-service.ts<br/>文件服务]
+            AIService[ai-service.ts<br/>AI服务]
+            TerminalService[terminal-service.ts<br/>终端服务]
+            ConfigService[config-service.ts<br/>配置服务]
+        end
+
+        subgraph UtilsGrp["工具层"]
+            Utils[utils/<br/>工具函数]
+            Types[types/<br/>类型定义]
+            Constants[constants/<br/>常量定义]
+        end
+    end
+
+    %% 后端组件关系图
+    subgraph Backend["后端组件层 (Rust)"]
+        subgraph Entry["入口点"]
+            Main[main.rs<br/>应用入口]
+            Lib[lib.rs<br/>库入口]
+        end
+
+        subgraph TauriComm["Tauri通信层"]
+            TauriCommands[tauri/commands.rs<br/>命令处理]
+            TauriEvents[tauri/events.rs<br/>事件处理]
+        end
+
+        subgraph Core["核心层"]
+            CoreApp[core/app.rs<br/>应用核心]
+            CoreState[core/state.rs<br/>状态管理]
+        end
+
+        subgraph Config["配置层"]
+            ConfigSchema[config/schema.rs<br/>配置结构]
+            ConfigLoader[config/loader.rs<br/>配置加载]
+            ConfigManager[config/mod.rs<br/>配置管理]
+        end
+
+        subgraph Database["数据库层"]
+            DBConnection[database/connection.rs<br/>数据库连接]
+            DBModels[database/models/<br/>数据模型]
+            DBRepos[database/repositories/<br/>数据仓库]
+        end
+
+        subgraph BackendServices["服务层"]
+            AIServiceRust[services/ai.rs<br/>AI服务]
+            TerminalServiceRust[services/terminal.rs<br/>终端服务]
+            FileServiceRust[services/fs.rs<br/>文件服务]
+            ProcessService[services/process.rs<br/>进程服务]
+        end
+
+        subgraph BackendUtils["工具层"]
+            ErrorUtils[utils/error.rs<br/>错误处理]
+            LogUtils[utils/logging.rs<br/>日志配置]
+            ValidationUtils[utils/validation.rs<br/>验证工具]
+        end
+    end
+
+    %% 依赖关系
+    App --> MainLayout
+    MainLayout --> Dashboard
+    MainLayout --> SettingsPage
+    Dashboard --> EditorComp
+    Dashboard --> ChatComp
+    Dashboard --> TerminalComp
+    Dashboard --> OutputComp
+    Dashboard --> ExplorerComp
+    SettingsPage --> SettingsComp
+
+    EditorComp --> EditorStore
+    ChatComp --> ChatStore
+    TerminalComp --> TerminalStore
+    OutputComp --> AppStore
+    ExplorerComp --> AppStore
+    SettingsComp --> AppStore
+
+    EditorStore --> AppStore
+    ChatStore --> AppStore
+    TerminalStore --> AppStore
+    ThemeStore --> AppStore
+    UserStore --> AppStore
+
+    EditorComp --> TauriService
+    ChatComp --> TauriService
+    TerminalComp --> TauriService
+    OutputComp --> TauriService
+    ExplorerComp --> TauriService
+    SettingsComp --> TauriService
+
+    TauriService --> FileService
+    TauriService --> AIService
+    TauriService --> TerminalService
+    TauriService --> ConfigService
+
+    FileService --> Utils
+    AIService --> Utils
+    TerminalService --> Utils
+    ConfigService --> Utils
+    Utils --> Types
+    Utils --> Constants
+
+    %% 后端依赖
+    Main --> Lib
+    Lib --> TauriCommands
+    Lib --> TauriEvents
+    Lib --> CoreApp
+    Lib --> ConfigManager
+
+    TauriCommands --> CoreApp
+    TauriCommands --> AIServiceRust
+    TauriCommands --> TerminalServiceRust
+    TauriCommands --> FileServiceRust
+    TauriCommands --> ProcessService
+
+    TauriEvents --> CoreApp
+    TauriEvents --> ProcessService
+
+    CoreApp --> CoreState
+    CoreApp --> ConfigManager
+    CoreApp --> DBConnection
+
+    ConfigManager --> ConfigSchema
+    ConfigManager --> ConfigLoader
+
+    DBConnection --> DBModels
+    DBConnection --> DBRepos
+
+    AIServiceRust --> ErrorUtils
+    TerminalServiceRust --> ErrorUtils
+    FileServiceRust --> ErrorUtils
+    ProcessService --> ErrorUtils
+
+    ErrorUtils --> LogUtils
+    ErrorUtils --> ValidationUtils
+
+    %% 前后端通信
+    TauriService -.->|Tauri IPC| TauriCommands
+    TauriService -.->|事件监听| TauriEvents
+
+    %% 样式定义
+    classDef frontendRoot fill:#e1f5fe,stroke:#01579b
+    classDef frontendComp fill:#f3e5f5,stroke:#4a148c
+    classDef frontendPage fill:#e8f5e8,stroke:#1b5e20
+    classDef frontendStore fill:#fff3e0,stroke:#e65100
+    classDef frontendService fill:#fce4ec,stroke:#880e4f
+    classDef frontendUtil fill:#f3e5f5,stroke:#4a148c,stroke-dasharray:5 5
+
+    classDef backendEntry fill:#e1f5fe,stroke:#01579b
+    classDef backendTauri fill:#f3e5f5,stroke:#4a148c
+    classDef backendCore fill:#e8f5e8,stroke:#1b5e20
+    classDef backendConfig fill:#fff3e0,stroke:#e65100
+    classDef backendDB fill:#fce4ec,stroke:#880e4f
+    classDef backendService fill:#e1f5fe,stroke:#01579b,stroke-dasharray:5 5
+    classDef backendUtil fill:#f3e5f5,stroke:#4a148c,stroke-dasharray:5 5
+
+    class App,MainLayout frontendRoot
+    class EditorComp,ChatComp,TerminalComp,OutputComp,ExplorerComp,SettingsComp frontendComp
+    class Dashboard,Home,Login,SettingsPage frontendPage
+    class AppStore,ThemeStore,UserStore,ChatStore,EditorStore,TerminalStore frontendStore
+    class TauriService,FileService,AIService,TerminalService,ConfigService frontendService
+    class Utils,Types,Constants frontendUtil
+
+    class Main,Lib backendEntry
+    class TauriCommands,TauriEvents backendTauri
+    class CoreApp,CoreState backendCore
+    class ConfigSchema,ConfigLoader,ConfigManager backendConfig
+    class DBConnection,DBModels,DBRepos backendDB
+    class AIServiceRust,TerminalServiceRust,FileServiceRust,ProcessService backendService
+    class ErrorUtils,LogUtils,ValidationUtils backendUtil
