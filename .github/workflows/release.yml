@@ -57,10 +57,10 @@ jobs:
             ${{ runner.os }}-pnpm-store-
 
       - name: Install root dependencies
-        run: pnpm install
+        run: pnpm install --no-frozen-lockfile
 
       - name: Install frontend dependencies
-        run: pnpm --dir frontend install
+        run: pnpm --dir frontend install --no-frozen-lockfile
 
       - name: Install Rust toolchain
         uses:  dtolnay/rust-toolchain@stable
