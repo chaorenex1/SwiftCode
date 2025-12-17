@@ -425,17 +425,17 @@ pub async fn execute_command(
 pub async fn execute_terminal_command(
     state: State<'_, AppState>,
     sessionId: String,
+    shell: String,
     command: String,
-    args: Vec<String>,
 ) -> Result<String, String> {
     info!(
-        "Executing terminal command in session {}: {} {:?}",
-        sessionId, command, args
+        "Executing terminal command in session {} with shell {}: {}",
+        sessionId, shell, command
     );
 
     state
         .terminal
-        .execute_command(&sessionId, &command, &args)
+        .execute_command(&sessionId, &shell, &command)
         .map_err(|e| e.to_string())
 }
 

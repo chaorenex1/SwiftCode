@@ -48,19 +48,11 @@ pub fn init(app: &mut App) -> AppResult<()> {
     app.manage(config.clone());
 
     // Create application state
-    let mut app_state = AppState::new(
+    let app_state = AppState::new(
         app.handle().clone(),
         config,
         Arc::new(crate::database::connection::DatabasePool::new()),
     );
-
-    // Use configured default shell for terminal service if provided
-    {
-        let cfg = app_state.config.lock().unwrap();
-        app_state
-            .terminal
-            .set_default_shell(cfg.cli.default_shell.clone());
-    }
 
     // Store application state in Tauri state
     app.manage(app_state);

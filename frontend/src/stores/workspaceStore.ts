@@ -29,13 +29,14 @@ export const useAppStore = defineStore('app', () => {
   const isConnected = ref(false);
   const isLoading = ref(false);
   const error = ref<string | null>(null);
+  const defaultShell = navigator.userAgent.includes('Windows') ? 'powershell' : 'bash';
   const settings = ref<AppSettings>({
     workspace: 'default',
     theme: 'light',
     fontSize: 14,
     autoSave: true,
     aiModel: 'claude-3-5-sonnet',
-    terminalShell: 'bash',
+    terminalShell: defaultShell,
   });
   const workspaces = ref<Workspace[]>([]);
   const unlistenFunctions = ref<UnlistenFn[]>([]);

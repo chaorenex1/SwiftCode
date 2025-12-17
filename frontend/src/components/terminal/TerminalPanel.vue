@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, onMounted, onUnmounted, nextTick, computed } from 'vue';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -9,12 +9,39 @@ import { ElTabs, ElTabPane, ElButton, ElSelect, ElOption } from 'element-plus';
 import type { TabsPaneContext, TabPaneName } from 'element-plus';
 
 import { useAppStore } from '@/stores/workspaceStore';
+import { useTerminalStore } from '@/stores';
+import type { TerminalTab } from '@/stores/terminalStore';
 import { spawnTerminal, killTerminal, executeTerminalCommand } from '@/services/tauri/commands';
 
 const appStore = useAppStore();
+const terminalStore = useTerminalStore();
+const isWindows = navigator.userAgent.includes('Windows');
+const shellOptions = computed(() =>
+  isWindows
+    ? [
+        { label: 'PowerShell', value: 'powershell' },
+        { label: 'cmd', value: 'cmd' },
+      ]
+    : [
+        { label: 'bash', value: 'bash' },
+        { label: 'zsh', value: 'zsh' },
+      ],
+);
 const terminalContainer = ref<HTMLElement>();
-const terminals = ref<{ id: string; name: string; terminal: Terminal; sessionId: string }[]>([]);
-const activeTerminalIndex = ref<TabPaneName>(0);
+// 仅在组件中保存 xterm 实例映射，真正的数据（id/name/sessionId、当前激活索引）放到 Pinia store 中
+const terminalInstances = ref<Record<string, Terminal>>({});
+const terminals = computed(() => terminalStore.terminals);
+const activeTerminalIndex = computed<TabPaneName>({
+  get() {
+    return terminalStore.activeIndex;
+  },
+  set(value: TabPaneName) {
+    const idx = typeof value === 'number' ? value : Number(value);
+    if (!Number.isNaN(idx)) {
+      terminalStore.setActiveIndex(idx);
+    }
+  },
+});
 
 // Initialize terminal
 onMounted(() => {
@@ -23,15 +50,17 @@ onMounted(() => {
 
 // Cleanup on unmount
 onUnmounted(() => {
-  terminals.value.forEach((term) => {
-    term.terminal.dispose();
+  Object.values(terminalInstances.value).forEach((term) => {
+    term.dispose();
   });
+  terminalInstances.value = {};
+  terminalStore.clear();
 });
 
 // Create new terminal (with backend session)
 async function createNewTerminal() {
   const id = `terminal-${Date.now()}`;
-  const name = `终端 ${terminals.value.length + 1}`;
+  const name = `终端 ${terminalStore.terminals.length + 1}`;
 
   // Create backend terminal session
   let sessionId: string;
@@ -66,9 +95,9 @@ async function createNewTerminal() {
   terminal.loadAddon(fitAddonInstance);
   terminal.loadAddon(webLinksAddon);
 
-  // Store terminal and its backend session id
-  terminals.value.push({ id, name, terminal, sessionId });
-  activeTerminalIndex.value = terminals.value.length - 1;
+  // Store terminal metadata and keep xterm instance locally
+  terminalStore.addTerminal({ id, name, sessionId });
+  terminalInstances.value[id] = terminal;
 
   // Initialize terminal after DOM update
   nextTick(() => {
@@ -200,7 +229,7 @@ async function handleCommand(command: string, terminal: Terminal, sessionId: str
   }
 
   if (trimmedCommand === 'exit') {
-    const index = terminals.value.findIndex((t) => t.terminal === terminal);
+    const index = terminals.value.findIndex((t: TerminalTab) => terminalInstances.value[t.id] === terminal);
     if (index >= 0) {
       closeTerminal(index);
     }
@@ -209,8 +238,8 @@ async function handleCommand(command: string, terminal: Terminal, sessionId: str
 
   // Execute command via backend terminal session
   try {
-    const [cmd, ...args] = trimmedCommand.split(' ');
-	const result = await executeTerminalCommand(sessionId as string, cmd, args);
+    const shell = appStore.settings.terminalShell;
+    const result = await executeTerminalCommand(sessionId as string, shell, trimmedCommand);
 
     if (result) {
       terminal.writeln(result);
@@ -232,16 +261,16 @@ function closeTerminal(name: TabPaneName) {
       console.error('Failed to kill terminal session:', err);
     });
 
-    term.terminal.dispose();
-    terminals.value.splice(index, 1);
+    const instance = terminalInstances.value[term.id];
+    if (instance) {
+      instance.dispose();
+      delete terminalInstances.value[term.id];
+    }
 
-    if (terminals.value.length === 0) {
+    terminalStore.removeTerminal(index);
+
+    if (terminalStore.terminals.length === 0) {
       createNewTerminal();
-    } else {
-      const activeIndex = Number(activeTerminalIndex.value);
-      if (activeIndex >= terminals.value.length) {
-        activeTerminalIndex.value = terminals.value.length - 1;
-      }
     }
   }
 }
@@ -250,14 +279,15 @@ function closeTerminal(name: TabPaneName) {
 function switchTerminal(pane: TabsPaneContext) {
   const index = typeof pane.paneName === 'number' ? pane.paneName : Number(pane.paneName);
   if (!Number.isNaN(index)) {
-    activeTerminalIndex.value = index;
+    terminalStore.setActiveIndex(index);
   }
 }
 
 // Refresh terminal
 function refreshTerminal() {
-  const activeIndex = Number(activeTerminalIndex.value);
-  const terminal = terminals.value[activeIndex]?.terminal;
+  const activeIndex = terminalStore.activeIndex;
+  const termMeta = terminals.value[activeIndex];
+  const terminal = termMeta ? terminalInstances.value[termMeta.id] : undefined;
   if (terminal) {
     terminal.clear();
     terminal.writeln('\x1b[1;32m终端已刷新\x1b[0m');
@@ -313,20 +343,10 @@ function refreshTerminal() {
             @change="appStore.setTerminalShell"
           >
             <ElOption
-              label="bash"
-              value="bash"
-            />
-            <ElOption
-              label="zsh"
-              value="zsh"
-            />
-            <ElOption
-              label="powershell"
-              value="powershell"
-            />
-            <ElOption
-              label="cmd"
-              value="cmd"
+              v-for="opt in shellOptions"
+              :key="opt.value"
+              :label="opt.label"
+              :value="opt.value"
             />
           </ElSelect>
         </div>
