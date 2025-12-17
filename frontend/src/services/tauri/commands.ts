@@ -85,11 +85,11 @@ export async function killTerminal(sessionId: string): Promise<void> {
 }
 
 // Settings commands
-export async function getSettings(): Promise<AppSettings> {
+export async function getSettings(): Promise<Record<string, any>> {
   return invoke('get_settings');
 }
 
-export async function saveSettings(settings: Partial<AppSettings>): Promise<void> {
+export async function saveSettings(settings: Record<string, any>): Promise<void> {
   return invoke('save_settings', { settings });
 }
 
@@ -223,4 +223,22 @@ export async function batchWriteFiles(files: Record<string, string>): Promise<vo
   );
 
   await Promise.all(promises);
+}
+
+// Recent directories commands
+export interface RecentDirectory {
+  path: string;
+  openedAt: string;
+}
+
+export async function addRecentDirectory(path: string): Promise<void> {
+  return invoke('add_recent_directory', { path });
+}
+
+export async function getRecentDirectories(): Promise<RecentDirectory[]> {
+  return invoke('get_recent_directories');
+}
+
+export async function clearRecentDirectories(): Promise<void> {
+  return invoke('clear_recent_directories');
 }

@@ -1,25 +1,30 @@
 <script setup lang="ts">
-import { Folder, Refresh, Plus, Delete, Edit } from '@element-plus/icons-vue';
+import { Folder, Plus, Delete, Edit } from '@element-plus/icons-vue';
 import {
   ElForm,
   ElFormItem,
   ElInput,
-  ElSelect,
-  ElOption,
   ElButton,
   ElSwitch,
   ElTable,
   ElTableColumn,
   ElDialog,
+  ElMessage,
 } from 'element-plus';
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
 
-import { useAppStore } from '../../stores/workspaceStore';
+import { useAppStore } from '@/stores/workspaceStore';
+import { useFileStore } from '@/stores/filesStore';
+import { getSettings, saveSettings as saveTauriSettings, addRecentDirectory } from '@/services/tauri/commands';
+
+const router = useRouter();
+const fileStore = useFileStore();
 
 const appStore = useAppStore();
 
 // Workspace settings
-const workspaceName = ref('');
 const dataDirectory = ref('~/.code-ai-assistant');
 
 // CLI tool paths
@@ -59,10 +64,50 @@ const showCodeCliDialog = ref(false);
 // Save settings
 async function saveSettings() {
   try {
+    // 构建要保存的设置对象
+    const settingsToSave: Record<string, any> = {
+      'user.theme': appStore.settings.theme,
+      'user.fontSize': appStore.settings.fontSize,
+      'user.autoSave': appStore.settings.autoSave,
+      'workspace.current': appStore.currentWorkspace,
+      'workspace.dataDirectory': dataDirectory.value,
+      'cli.nodejs': cliPaths.value.nodejs,
+      'cli.python': cliPaths.value.python,
+      'cli.git': cliPaths.value.git,
+    };
+
+    // 保存环境变量
+    envVars.value.forEach((envVar) => {
+      settingsToSave[`env.${envVar.name}`] = JSON.stringify({
+        value: envVar.value,
+        isSecret: envVar.isSecret,
+      });
+    });
+
+    // 保存 AI 模型配置
+    aiModels.value.forEach((model, index) => {
+      settingsToSave[`ai.models.${index}`] = JSON.stringify({
+        name: model.name,
+        endpoint: model.endpoint,
+        apiKey: model.apiKey,
+      });
+    });
+
+    // 保存 Code CLI 配置
+    codeClis.value.forEach((cli, index) => {
+      settingsToSave[`cli.code.${index}`] = JSON.stringify({
+        name: cli.name,
+        command: cli.command,
+        args: cli.args,
+      });
+    });
+
+    await saveTauriSettings(settingsToSave);
     await appStore.saveSettings();
-    // TODO: Save other settings
+    ElMessage.success('设置已保存');
   } catch (error) {
     console.error('Failed to save settings:', error);
+    ElMessage.error('保存设置失败: ' + (error as Error).message);
   }
 }
 
@@ -70,36 +115,29 @@ async function saveSettings() {
 async function resetSettings() {
   if (confirm('确定要重置所有设置为默认值吗？')) {
     try {
+      // 调用后端重置设置
+      await saveTauriSettings({});
+
       // Reset to default settings
       appStore.settings.theme = 'light';
       appStore.settings.fontSize = 14;
       appStore.settings.autoSave = true;
+      dataDirectory.value = '~/.code-ai-assistant';
+      cliPaths.value = {
+        nodejs: '/usr/bin/node',
+        python: '/usr/bin/python3',
+        git: '/usr/bin/git',
+      };
+      envVars.value = [];
+      aiModels.value = [];
+      codeClis.value = [];
+
       await appStore.saveSettings();
-      // TODO: Reset other settings
+      await loadSettings();
+      ElMessage.success('设置已重置为默认值');
     } catch (error) {
       console.error('Failed to reset settings:', error);
-    }
-  }
-}
-
-// Workspace operations
-async function createWorkspace() {
-  if (workspaceName.value.trim()) {
-    try {
-      await appStore.createWorkspace(workspaceName.value.trim());
-      workspaceName.value = '';
-    } catch (error) {
-      console.error('Failed to create workspace:', error);
-    }
-  }
-}
-
-async function deleteWorkspace(name: string) {
-  if (confirm(`确定要删除工作区 "${name}" 吗？`)) {
-    try {
-      await appStore.deleteWorkspace(name);
-    } catch (error) {
-      console.error('Failed to delete workspace:', error);
+      ElMessage.error('重置设置失败: ' + (error as Error).message);
     }
   }
 }
@@ -143,139 +181,193 @@ function removeCodeCli(index: number) {
   codeClis.value.splice(index, 1);
 }
 
-// Browse directory
-function browseDirectory() {
-  // TODO: Implement directory browser
-  console.log('Browse directory');
+// 选择工作目录
+async function selectWorkspaceDirectory() {
+  try {
+    const result = await openDialog({
+      directory: true,
+      multiple: false,
+      title: '选择工作目录',
+    });
+
+    if (result && typeof result === 'string') {
+      // 加载目录
+      await fileStore.loadDirectory(result);
+
+      // 保存到最近目录
+      await addRecentDirectory(result);
+
+      ElMessage.success('工作目录已设置: ' + result);
+
+      // 跳转到 dashboard
+      router.push('/dashboard');
+    }
+  } catch (error) {
+    ElMessage.error('选择目录失败: ' + (error as Error).message);
+    console.error('选择目录失败', error);
+  }
 }
+
+// 从后端加载设置
+async function loadSettings() {
+  try {
+    const settings = await getSettings();
+
+    // 加载应用设置
+    if (settings['user.theme']) {
+      appStore.settings.theme = settings['user.theme'];
+    }
+    if (settings['user.fontSize']) {
+      appStore.settings.fontSize = Number(settings['user.fontSize']);
+    }
+    if (settings['user.autoSave'] !== undefined) {
+      appStore.settings.autoSave = settings['user.autoSave'];
+    }
+    if (settings['workspace.current']) {
+      appStore.currentWorkspace = settings['workspace.current'];
+    }
+    if (settings['workspace.dataDirectory']) {
+      dataDirectory.value = settings['workspace.dataDirectory'];
+    }
+
+    // 加载 CLI 路径
+    if (settings['cli.nodejs']) {
+      cliPaths.value.nodejs = settings['cli.nodejs'];
+    }
+    if (settings['cli.python']) {
+      cliPaths.value.python = settings['cli.python'];
+    }
+    if (settings['cli.git']) {
+      cliPaths.value.git = settings['cli.git'];
+    }
+
+    // 加载环境变量
+    const loadedEnvVars: typeof envVars.value = [];
+    Object.keys(settings).forEach(key => {
+      if (key.startsWith('env.')) {
+        const envName = key.substring(4);
+        const envData = typeof settings[key] === 'string'
+          ? JSON.parse(settings[key])
+          : settings[key];
+        loadedEnvVars.push({
+          name: envName,
+          value: envData.value || '',
+          isSecret: envData.isSecret || false,
+        });
+      }
+    });
+    if (loadedEnvVars.length > 0) {
+      envVars.value = loadedEnvVars;
+    }
+
+    // 加载 AI 模型配置
+    const loadedAiModels: typeof aiModels.value = [];
+    Object.keys(settings).forEach(key => {
+      if (key.startsWith('ai.models.')) {
+        const modelData = typeof settings[key] === 'string'
+          ? JSON.parse(settings[key])
+          : settings[key];
+        loadedAiModels.push({
+          name: modelData.name || '',
+          endpoint: modelData.endpoint || '',
+          apiKey: modelData.apiKey || '********',
+        });
+      }
+    });
+    if (loadedAiModels.length > 0) {
+      aiModels.value = loadedAiModels;
+    }
+
+    // 加载 Code CLI 配置
+    const loadedCodeClis: typeof codeClis.value = [];
+    Object.keys(settings).forEach(key => {
+      if (key.startsWith('cli.code.')) {
+        const cliData = typeof settings[key] === 'string'
+          ? JSON.parse(settings[key])
+          : settings[key];
+        loadedCodeClis.push({
+          name: cliData.name || '',
+          command: cliData.command || '',
+          args: cliData.args || '',
+        });
+      }
+    });
+    if (loadedCodeClis.length > 0) {
+      codeClis.value = loadedCodeClis;
+    }
+
+    console.log('Settings loaded successfully');
+  } catch (error) {
+    console.error('Failed to load settings:', error);
+    ElMessage.warning('从后端加载设置失败，使用默认设置');
+  }
+}
+
+// 组件挂载时加载设置
+onMounted(() => {
+  loadSettings();
+});
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="settings-container space-y-4 max-h-full overflow-y-auto pb-4 pt-0">
     <!-- Workspace Settings -->
-    <div class="bg-surface rounded-lg p-6">
-      <h2 class="text-lg font-semibold mb-4">
+    <div class="bg-surface rounded-t-lg border-b border-border p-4 shadow-sm">
+      <h2 class="text-lg font-semibold mb-3">
         工作区设置
       </h2>
 
       <ElForm label-width="120px">
-        <ElFormItem label="当前工作区">
+        <ElFormItem label="选择工作目录">
           <div class="flex items-center space-x-2">
-            <ElSelect
-              v-model="appStore.currentWorkspace"
-              style="width: 200px"
-            >
-              <ElOption
-                v-for="workspace in appStore.workspaces"
-                :key="workspace.id"
-                :label="workspace.name"
-                :value="workspace.name"
-              />
-            </ElSelect>
-
-            <ElInput
-              v-model="workspaceName"
-              placeholder="新工作区名称"
-              style="width: 200px"
-            />
-
             <ElButton
               type="primary"
-              :icon="Plus"
-              @click="createWorkspace"
-            >
-              新建
-            </ElButton>
-
-            <ElButton
-              v-if="appStore.currentWorkspace !== 'default'"
-              type="danger"
-              :icon="Delete"
-              @click="deleteWorkspace(appStore.currentWorkspace)"
-            >
-              删除
-            </ElButton>
-          </div>
-        </ElFormItem>
-
-        <ElFormItem label="应用数据目录">
-          <div class="flex items-center space-x-2">
-            <ElInput
-              v-model="dataDirectory"
-              readonly
-              style="width: 300px"
-            />
-            <ElButton
               :icon="Folder"
-              @click="browseDirectory"
+              @click="selectWorkspaceDirectory"
             >
-              浏览...
+              选择目录
             </ElButton>
-            <ElButton :icon="Refresh">
-              重置为默认
-            </ElButton>
+            <span v-if="fileStore.currentDirectory" class="text-sm text-gray-500">
+              当前: {{ fileStore.currentDirectory }}
+            </span>
           </div>
         </ElFormItem>
       </ElForm>
     </div>
 
     <!-- CLI Tool Paths -->
-    <div class="bg-surface rounded-lg p-6">
-      <h2 class="text-lg font-semibold mb-4">
+    <div class="bg-surface border-b border-border p-4 shadow-sm">
+      <h2 class="text-lg font-semibold mb-3">
         CLI 工具路径设置
       </h2>
 
       <ElForm label-width="120px">
         <ElFormItem label="Node.js">
-          <div class="flex items-center space-x-2">
-            <ElInput
-              v-model="cliPaths.nodejs"
-              style="width: 300px"
-            />
-            <ElButton
-              :icon="Folder"
-              @click="browseDirectory"
-            >
-              浏览...
-            </ElButton>
-          </div>
+          <ElInput
+            v-model="cliPaths.nodejs"
+            placeholder="例: /usr/bin/node 或 node"
+          />
         </ElFormItem>
 
         <ElFormItem label="Python">
-          <div class="flex items-center space-x-2">
-            <ElInput
-              v-model="cliPaths.python"
-              style="width: 300px"
-            />
-            <ElButton
-              :icon="Folder"
-              @click="browseDirectory"
-            >
-              浏览...
-            </ElButton>
-          </div>
+          <ElInput
+            v-model="cliPaths.python"
+            placeholder="例: /usr/bin/python3 或 python"
+          />
         </ElFormItem>
 
         <ElFormItem label="Git">
-          <div class="flex items-center space-x-2">
-            <ElInput
-              v-model="cliPaths.git"
-              style="width: 300px"
-            />
-            <ElButton
-              :icon="Folder"
-              @click="browseDirectory"
-            >
-              浏览...
-            </ElButton>
-          </div>
+          <ElInput
+            v-model="cliPaths.git"
+            placeholder="例: /usr/bin/git 或 git"
+          />
         </ElFormItem>
       </ElForm>
     </div>
 
     <!-- Environment Variables -->
-    <div class="bg-surface rounded-lg p-6">
-      <div class="flex items-center justify-between mb-4">
+    <div class="bg-surface border-b border-border p-4 shadow-sm">
+      <div class="flex items-center justify-between mb-3">
         <h2 class="text-lg font-semibold">
           环境变量设置
         </h2>
@@ -329,8 +421,8 @@ function browseDirectory() {
     </div>
 
     <!-- AI Models -->
-    <div class="bg-surface rounded-lg p-6">
-      <div class="flex items-center justify-between mb-4">
+    <div class="bg-surface border-b border-border p-4 shadow-sm">
+      <div class="flex items-center justify-between mb-3">
         <h2 class="text-lg font-semibold">
           模型管理
         </h2>
@@ -360,7 +452,7 @@ function browseDirectory() {
           prop="apiKey"
           label="API密钥"
         >
-          <template #default="{ row }">
+          <template #default>
             <span>********</span>
           </template>
         </ElTableColumn>
@@ -387,8 +479,8 @@ function browseDirectory() {
     </div>
 
     <!-- Code CLIs -->
-    <div class="bg-surface rounded-lg p-6">
-      <div class="flex items-center justify-between mb-4">
+    <div class="bg-surface rounded-b-lg p-4 shadow-sm">
+      <div class="flex items-center justify-between mb-3">
         <h2 class="text-lg font-semibold">
           Code CLI 管理
         </h2>
@@ -552,7 +644,7 @@ function browseDirectory() {
 
 <style scoped>
 :deep(.el-form-item) {
-  margin-bottom: 20px;
+  margin-bottom: 12px;
 }
 
 :deep(.el-table) {
@@ -561,5 +653,29 @@ function browseDirectory() {
 
 :deep(.el-table th) {
   background-color: var(--color-surface);
+}
+
+/* 自定义滚动条样式 */
+.settings-container {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(156, 163, 175, 0.5) transparent;
+  scroll-behavior: smooth;
+}
+
+.settings-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.settings-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.settings-container::-webkit-scrollbar-thumb {
+  background-color: rgba(156, 163, 175, 0.5);
+  border-radius: 4px;
+}
+
+.settings-container::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(156, 163, 175, 0.8);
 }
 </style>

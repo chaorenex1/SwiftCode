@@ -46,6 +46,13 @@ export const useFileStore = defineStore('files', () => {
       error.value = null;
 
       const targetPath = path || currentDirectory.value;
+
+      // 如果是新的根目录，清空已打开的文件
+      if (path && path !== currentDirectory.value) {
+        openedFiles.value = [];
+        activeFileIndex.value = -1;
+      }
+
       const fileList = (await invoke('list_files', { path: targetPath })) as Array<{
         name: string;
         path: string;

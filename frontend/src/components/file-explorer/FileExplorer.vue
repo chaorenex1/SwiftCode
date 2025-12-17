@@ -11,7 +11,7 @@ import {
 } from 'element-plus';
 import { ref, onMounted } from 'vue';
 
-import { useFileStore } from '../../stores/filesStore';
+import { useFileStore } from '@/stores/filesStore';
 
 const fileStore = useFileStore();
 const searchQuery = ref('');

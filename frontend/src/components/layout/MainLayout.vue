@@ -3,13 +3,13 @@ import { Menu, Setting, Folder, Message, Document } from '@element-plus/icons-vu
 import { ElContainer, ElHeader, ElMain, ElAside, ElFooter } from 'element-plus';
 import { ref, computed } from 'vue';
 
-import { useAppStore } from '../../stores/workspaceStore';
-import ChatPanel from '../chat/ChatPanel.vue';
-import CodeEditor from '../editor/CodeEditor.vue';
-import FileExplorer from '../file-explorer/FileExplorer.vue';
-import OutputPanel from '../output/OutputPanel.vue';
-import SettingsPanel from '../settings/SettingsPanel.vue';
-import TerminalPanel from '../terminal/TerminalPanel.vue';
+import { useAppStore } from '@/stores/workspaceStore';
+import ChatPanel from '@/components/chat/ChatPanel.vue';
+import CodeEditor from '@/components/editor/CodeEditor.vue';
+import FileExplorer from '@/components/file-explorer/FileExplorer.vue';
+import OutputPanel from '@/components/output/OutputPanel.vue';
+import SettingsPanel from '@/components/settings/SettingsPanel.vue';
+import TerminalPanel from '@/components/terminal/TerminalPanel.vue';
 
 import type { el } from 'element-plus/es/locales.mjs';
 
@@ -151,9 +151,11 @@ function openSettings() {
         <!-- Settings View -->
         <div
           v-else-if="activeTab === 'settings'"
-          class="h-full overflow-auto p-6"
+          class="h-full overflow-y-auto bg-gray-50 dark:bg-gray-900"
         >
-          <SettingsPanel />
+          <div class="max-w-7xl mx-auto p-4">
+            <SettingsPanel />
+          </div>
         </div>
       </ElMain>
     </ElContainer>

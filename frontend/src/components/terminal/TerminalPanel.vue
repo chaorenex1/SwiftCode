@@ -8,7 +8,7 @@ import '@xterm/xterm/css/xterm.css';
 import { Plus, Close, Refresh } from '@element-plus/icons-vue';
 import { ElTabs, ElTabPane, ElButton, ElSelect, ElOption } from 'element-plus';
 
-import { useAppStore } from '../../stores/workspaceStore';
+import { useAppStore } from '@/stores/workspaceStore';
 
 const appStore = useAppStore();
 const terminalContainer = ref<HTMLElement>();

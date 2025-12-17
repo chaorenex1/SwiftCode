@@ -5,11 +5,7 @@
 use std::fs;
 use std::path::Path;
 use serde::{Deserialize, Serialize};
-use tauri::State;
 use tracing::{error, info};
-
-use crate::config::AppConfig;
-use crate::core::AppState;
 
 /// File entry for directory listing
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -220,42 +216,94 @@ pub async fn kill_terminal(terminal_id: String) -> Result<(), String> {
 
 /// Get application settings
 #[tauri::command]
-pub async fn get_settings(state: State<'_, AppState>) -> Result<AppConfig, String> {
+pub async fn get_settings(app: tauri::AppHandle) -> Result<serde_json::Value, String> {
     info!("Getting application settings");
-    let config = state.config.lock().map_err(|e| e.to_string())?;
-    Ok(config.clone())
+    
+    let db = crate::database::connection::get_db_connection(&app)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    let settings = crate::database::repositories::settings_repository::SettingsRepository::get_all(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    // Convert settings to JSON object
+    let mut settings_map = serde_json::Map::new();
+    for setting in settings {
+        let value: serde_json::Value = serde_json::from_str(&setting.value)
+            .unwrap_or(serde_json::Value::String(setting.value.clone()));
+        settings_map.insert(setting.key, value);
+    }
+    
+    Ok(serde_json::Value::Object(settings_map))
 }
 
 /// Save application settings
 #[tauri::command]
 pub async fn save_settings(
-    state: State<'_, AppState>,
-    config: AppConfig,
+    app: tauri::AppHandle,
+    settings: serde_json::Value,
 ) -> Result<(), String> {
     info!("Saving application settings");
 
-    crate::config::save_config(&config).map_err(|e| e.to_string())?;
-
-    // Update state
-    let mut state_config = state.config.lock().map_err(|e| e.to_string())?;
-    *state_config = config;
+    let db = crate::database::connection::get_db_connection(&app)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    // If settings is an object, save each key-value pair
+    if let serde_json::Value::Object(map) = settings {
+        for (key, value) in map {
+            let value_str = serde_json::to_string(&value).map_err(|e| e.to_string())?;
+            
+            // Determine category from key prefix
+            let category = if key.starts_with("app.") {
+                "app"
+            } else if key.starts_with("user.") {
+                "user"
+            } else if key.starts_with("workspace.") {
+                "workspace"
+            } else if key.starts_with("ai.") {
+                "ai"
+            } else {
+                "general"
+            };
+            
+            crate::database::repositories::settings_repository::SettingsRepository::upsert(
+                &db,
+                &key,
+                &value_str,
+                category,
+                None,
+            )
+            .await
+            .map_err(|e| e.to_string())?;
+        }
+    }
 
     Ok(())
 }
 
 /// Reset settings to defaults
 #[tauri::command]
-pub async fn reset_settings(state: State<'_, AppState>) -> Result<AppConfig, String> {
+pub async fn reset_settings(app: tauri::AppHandle) -> Result<(), String> {
     info!("Resetting settings to defaults");
+    
+    let db = crate::database::connection::get_db_connection(&app)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    // Delete all user-modifiable settings
+    crate::database::repositories::settings_repository::SettingsRepository::delete_by_category(&db, "user")
+        .await
+        .map_err(|e| e.to_string())?;
+    crate::database::repositories::settings_repository::SettingsRepository::delete_by_category(&db, "workspace")
+        .await
+        .map_err(|e| e.to_string())?;
+    crate::database::repositories::settings_repository::SettingsRepository::delete_by_category(&db, "general")
+        .await
+        .map_err(|e| e.to_string())?;
 
-    let default_config = AppConfig::default();
-    crate::config::save_config(&default_config).map_err(|e| e.to_string())?;
-
-    // Update state
-    let mut state_config = state.config.lock().map_err(|e| e.to_string())?;
-    *state_config = default_config.clone();
-
-    Ok(default_config)
+    Ok(())
 }
 
 /// Get workspaces
@@ -347,5 +395,156 @@ pub async fn get_logs(limit: Option<usize>) -> Result<Vec<String>, String> {
 pub async fn clear_logs() -> Result<(), String> {
     info!("Clearing application logs");
     // TODO: Clear log file
+    Ok(())
+}
+
+/// Get a single setting by key
+#[tauri::command]
+pub async fn get_setting(app: tauri::AppHandle, key: String) -> Result<Option<serde_json::Value>, String> {
+    info!("Getting setting: {}", key);
+    
+    let db = crate::database::connection::get_db_connection(&app)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    let setting = crate::database::repositories::settings_repository::SettingsRepository::get_by_key(&db, &key)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    Ok(setting.map(|s| {
+        serde_json::from_str(&s.value)
+            .unwrap_or(serde_json::Value::String(s.value))
+    }))
+}
+
+/// Save a single setting
+#[tauri::command]
+pub async fn save_setting(
+    app: tauri::AppHandle,
+    key: String,
+    value: serde_json::Value,
+    category: Option<String>,
+) -> Result<(), String> {
+    info!("Saving setting: {}", key);
+    
+    let db = crate::database::connection::get_db_connection(&app)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    let value_str = serde_json::to_string(&value).map_err(|e| e.to_string())?;
+    
+    // Determine category from key prefix if not provided
+    let cat = category.unwrap_or_else(|| {
+        if key.starts_with("app.") {
+            "app"
+        } else if key.starts_with("user.") {
+            "user"
+        } else if key.starts_with("workspace.") {
+            "workspace"
+        } else if key.starts_with("ai.") {
+            "ai"
+        } else {
+            "general"
+        }.to_string()
+    });
+    
+    crate::database::repositories::settings_repository::SettingsRepository::upsert(
+        &db,
+        &key,
+        &value_str,
+        &cat,
+        None,
+    )
+    .await
+    .map_err(|e| e.to_string())?;
+    
+    Ok(())
+}
+
+/// Get settings by category
+#[tauri::command]
+pub async fn get_settings_by_category(
+    app: tauri::AppHandle,
+    category: String,
+) -> Result<serde_json::Value, String> {
+    info!("Getting settings for category: {}", category);
+    
+    let db = crate::database::connection::get_db_connection(&app)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    let settings = crate::database::repositories::settings_repository::SettingsRepository::get_by_category(&db, &category)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    let mut settings_map = serde_json::Map::new();
+    for setting in settings {
+        let value: serde_json::Value = serde_json::from_str(&setting.value)
+            .unwrap_or(serde_json::Value::String(setting.value.clone()));
+        settings_map.insert(setting.key, value);
+    }
+    
+    Ok(serde_json::Value::Object(settings_map))
+}
+
+/// Add a recent directory
+#[tauri::command]
+pub async fn add_recent_directory(
+    app: tauri::AppHandle,
+    path: String,
+) -> Result<(), String> {
+    info!("Adding recent directory: {}", path);
+    
+    let db = crate::database::connection::get_db_connection(&app)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    crate::database::repositories::recent_directories_repository::RecentDirectoriesRepository::add(&db, &path)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    Ok(())
+}
+
+/// Get recent directories
+#[tauri::command]
+pub async fn get_recent_directories(
+    app: tauri::AppHandle,
+) -> Result<Vec<serde_json::Value>, String> {
+    info!("Getting recent directories");
+    
+    let db = crate::database::connection::get_db_connection(&app)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    let directories = crate::database::repositories::recent_directories_repository::RecentDirectoriesRepository::get_recent(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    let result = directories.into_iter().map(|dir| {
+        serde_json::json!({
+            "path": dir.path,
+            "openedAt": dir.opened_at.to_rfc3339(),
+        })
+    }).collect();
+    
+    Ok(result)
+}
+
+/// Clear recent directories
+#[tauri::command]
+pub async fn clear_recent_directories(
+    app: tauri::AppHandle,
+) -> Result<(), String> {
+    info!("Clearing recent directories");
+    
+    let db = crate::database::connection::get_db_connection(&app)
+        .await
+        .map_err(|e| e.to_string())?;
+    
+    crate::database::repositories::recent_directories_repository::RecentDirectoriesRepository::clear(&db)
+        .await
+        .map_err(|e| e.to_string())?;
+    
     Ok(())
 }

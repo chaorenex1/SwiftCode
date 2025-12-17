@@ -14,7 +14,7 @@ import {
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 
-import { useAppStore } from '../../stores/workspaceStore';
+import { useAppStore } from '@/stores/workspaceStore';
 
 const router = useRouter();
 const appStore = useAppStore();

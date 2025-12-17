@@ -71,6 +71,13 @@ module.exports = {
     'import/resolver': {
       typescript: {
         alwaysTryTypes: true,
+        project: './tsconfig.app.json',
+      },
+      alias: {
+        map: [
+          ['@', './src']
+        ],
+        extensions: ['.js', '.jsx', '.ts', '.tsx', '.vue']
       },
       node: {
         extensions: ['.js', '.jsx', '.ts', '.tsx', '.vue']

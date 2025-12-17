@@ -3,8 +3,8 @@ import { Link, Delete, Setting } from '@element-plus/icons-vue';
 import { ElInput, ElButton, ElSelect, ElOption, ElTooltip, ElTag } from 'element-plus';
 import { ref, computed } from 'vue';
 
-import { useFileStore } from '../../stores/filesStore';
-import { useAppStore } from '../../stores/workspaceStore';
+import { useFileStore } from '@/stores/filesStore';
+import { useAppStore } from '@/stores/workspaceStore';
 
 const appStore = useAppStore();
 const fileStore = useFileStore();

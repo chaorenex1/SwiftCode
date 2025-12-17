@@ -4,7 +4,7 @@ import { ElTabs, ElTabPane, ElButton, ElIcon, ElTooltip } from 'element-plus';
 import * as monaco from 'monaco-editor';
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
 
-import { useFileStore } from '../../stores/filesStore';
+import { useFileStore } from '@/stores/filesStore';
 
 const fileStore = useFileStore();
 const editorContainer = ref<HTMLElement>();

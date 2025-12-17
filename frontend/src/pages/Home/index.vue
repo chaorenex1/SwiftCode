@@ -3,14 +3,16 @@ import { Setting, Document, ChatDotRound, Promotion, Folder } from '@element-plu
 import { ElButton, ElCard, ElDialog, ElMessage } from 'element-plus';
 import { ref, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
+import { open as openDialog } from '@tauri-apps/plugin-dialog';
 
-import { openFileDialog } from '@/services/tauri/commands';
+import { addRecentDirectory, getRecentDirectories, type RecentDirectory } from '@/services/tauri/commands';
 import { useFileStore } from '@/stores/filesStore';
+
 const router = useRouter();
 const fileStore = useFileStore();
 
 const showDirectoryDialog = ref(false);
-const recentDirectories = ref<string[]>([]);
+const recentDirectories = ref<RecentDirectory[]>([]);
 const isLoading = ref(false);
 
 const features = [
@@ -38,57 +40,74 @@ async function startCoding() {
 async function selectDirectory() {
   try {
     isLoading.value = true;
-    const result = await openFileDialog({
+
+    // 使用 Tauri dialog 插件打开目录选择对话框
+    const result = await openDialog({
       directory: true,
+      multiple: false,
+      title: '选择工作目录',
     });
 
-    if (typeof result === 'string' && result) {
+    if (result && typeof result === 'string') {
       // 加载目录
       await fileStore.loadDirectory(result);
 
-      // 保存到最近打开的目录
-      saveRecentDirectory(result);
+      // 保存到后端最近打开的目录
+      await saveRecentDirectory(result);
+
+      // 关闭对话框
+      showDirectoryDialog.value = false;
 
       // 跳转到dashboard
       router.push('/dashboard');
+    } else {
+      // 用户取消了选择
+      showDirectoryDialog.value = false;
     }
   } catch (error) {
     ElMessage.error('选择目录失败: ' + (error as Error).message);
     console.error('选择目录失败', error);
+    showDirectoryDialog.value = false;
   } finally {
     isLoading.value = false;
-    showDirectoryDialog.value = false;
   }
 }
 
-function saveRecentDirectory(path: string) {
-  // 从localStorage获取最近目录
-  const recent = JSON.parse(localStorage.getItem('recentDirectories') || '[]');
+async function saveRecentDirectory(path: string) {
+  try {
+    // 保存到后端数据库
+    await addRecentDirectory(path);
 
-  // 移除已存在的相同路径
-  const filtered = recent.filter((p: string) => p !== path);
-
-  // 添加到最前面
-  filtered.unshift(path);
-
-  // 限制为5个
-  const limited = filtered.slice(0, 5);
-
-  // 保存回localStorage
-  localStorage.setItem('recentDirectories', JSON.stringify(limited));
-
-  // 更新响应式数据
-  recentDirectories.value = limited;
+    // 重新加载最近目录列表
+    await loadRecentDirectories();
+  } catch (error) {
+    console.error('保存最近目录失败', error);
+  }
 }
 
-function loadRecentDirectories() {
-  const recent = JSON.parse(localStorage.getItem('recentDirectories') || '[]');
-  recentDirectories.value = recent.slice(0, 5);
+async function loadRecentDirectories() {
+  try {
+    // 从后端获取最近目录
+    const directories = await getRecentDirectories();
+    recentDirectories.value = directories;
+  } catch (error) {
+    console.error('加载最近目录失败', error);
+    recentDirectories.value = [];
+  }
 }
 
-function openRecentDirectory(path: string) {
-  fileStore.loadDirectory(path);
-  router.push('/dashboard');
+async function openRecentDirectory(dir: RecentDirectory) {
+  try {
+    await fileStore.loadDirectory(dir.path);
+
+    // 更新最近打开时间
+    await addRecentDirectory(dir.path);
+
+    router.push('/dashboard');
+  } catch (error) {
+    ElMessage.error('打开目录失败: ' + (error as Error).message);
+    console.error('打开目录失败', error);
+  }
 }
 
 onMounted(() => {
@@ -193,20 +212,20 @@ onMounted(() => {
               class="flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded cursor-pointer"
               @click="openRecentDirectory(dir)"
             >
-              <div class="flex items-center">
+              <div class="flex items-center flex-1">
                 <el-icon class="mr-3 text-primary-500">
                   <Folder />
                 </el-icon>
-                <div>
-                  <div class="font-medium">
-                    {{ dir }}
+                <div class="flex-1 min-w-0">
+                  <div class="font-medium truncate">
+                    {{ dir.path }}
                   </div>
                   <div class="text-sm text-gray-500">
-                    点击打开
+                    {{ new Date(dir.openedAt).toLocaleString('zh-CN') }}
                   </div>
                 </div>
               </div>
-              <el-icon class="text-gray-400">
+              <el-icon class="text-gray-400 ml-2">
                 <Promotion />
               </el-icon>
             </div>

@@ -142,11 +142,12 @@ pub struct WorkspaceSettings {
 
 impl Default for AppConfig {
     fn default() -> Self {
+        let data_dir = get_default_data_dir().unwrap();
         Self {
             app: AppSettings {
                 name: "Code AI Assistant".to_string(),
                 version: "0.1.0".to_string(),
-                data_dir: get_default_data_dir().unwrap(),
+                data_dir: data_dir.clone(),
                 user_home: get_user_home().unwrap(),
                 auto_save_interval: Some(60),
                 auto_update: Some(true),
@@ -156,7 +157,7 @@ impl Default for AppConfig {
                 font_size: 14,
             },
             database: DatabaseSettings {
-                url: "sqlite://data/app.db?mode=rwc".to_string(),
+                url: format!("sqlite://{}/app.db?mode=rwc", data_dir),
                 max_connections: 10,
                 min_connections: 1,
             },
