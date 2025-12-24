@@ -50,6 +50,10 @@ pub enum AppError {
     #[error("Tauri error: {0}")]
     TauriError(#[from] tauri::Error),
 
+    /// Cancelled operations
+    #[error("Operation cancelled: {0}")]
+    Cancelled(String),
+
     /// Anyhow errors
     #[error("Other error: {0}")]
     AnyhowError(#[from] anyhow::Error),

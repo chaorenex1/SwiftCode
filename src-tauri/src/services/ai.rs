@@ -3,11 +3,14 @@
 //! This module handles communication with AI models and CLI tools.
 
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use tokio::io::AsyncWriteExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::process::Command;
+use tokio::sync::oneshot;
+use tokio::time::{sleep, Duration};
 use tracing::{debug, info, warn};
 
 use crate::utils::error::{AppError, AppResult};
@@ -32,7 +35,7 @@ pub struct CodeagentWrapperConfig {
     pub max_parallel_workers: Option<u32>,
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Default)]
 pub struct AiChatOptions {
     /// Selected code CLI name from UI (e.g. claude-cli/codex-cli/gemini-cli).
     pub code_cli: Option<String>,
@@ -49,6 +52,23 @@ pub struct AiChatOptions {
     pub code_cli_changed: Option<bool>,
     /// Environment variables (mapped to CODEAGENT_ENV).
     pub env: Vec<(String, String)>,
+    /// Cancellation signal used to terminate codeagent-wrapper.
+    pub cancel_rx: Option<oneshot::Receiver<()>>,
+}
+
+impl fmt::Debug for AiChatOptions {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AiChatOptions")
+            .field("code_cli", &self.code_cli)
+            .field("resume_session_id", &self.resume_session_id)
+            .field("parallel", &self.parallel)
+            .field("codex_model", &self.codex_model)
+            .field("workspace_dir", &self.workspace_dir)
+            .field("code_cli_changed", &self.code_cli_changed)
+            .field("env_len", &self.env.len())
+            .field("has_cancel_rx", &self.cancel_rx.is_some())
+            .finish()
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -237,6 +257,7 @@ impl AiService {
                 codex_model: options.codex_model,
                 env: options.env,
                 code_cli_changed: options.code_cli_changed,
+                cancel_rx: options.cancel_rx,
             })
             .await?;
 
@@ -488,14 +509,56 @@ impl AiService {
                 .map_err(|e| AppError::AiServiceError(format!("写入 codeagent-wrapper stdin 失败: {}", e)))?;
         }
 
-        let output = child
-            .wait_with_output()
-            .await
-            .map_err(|e| AppError::AiServiceError(format!("等待 codeagent-wrapper 退出失败: {}", e)))?;
+        let stdout_task = child.stdout.take().map(|mut stdout_pipe| {
+            tokio::spawn(async move {
+                let mut buf = Vec::new();
+                stdout_pipe
+                    .read_to_end(&mut buf)
+                    .await
+                    .map_err(|e| AppError::AiServiceError(format!("读取 codeagent-wrapper stdout 失败: {}", e)))?;
+                Ok(buf)
+            })
+        });
+        let stderr_task = child.stderr.take().map(|mut stderr_pipe| {
+            tokio::spawn(async move {
+                let mut buf = Vec::new();
+                stderr_pipe
+                    .read_to_end(&mut buf)
+                    .await
+                    .map_err(|e| AppError::AiServiceError(format!("读取 codeagent-wrapper stderr 失败: {}", e)))?;
+                Ok(buf)
+            })
+        });
 
-        let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
-        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
-        let exit_code = output.status.code().unwrap_or(-1);
+        let mut cancel_rx = spec.cancel_rx;
+        let exit_status = loop {
+            if let Some(status) = child
+                .try_wait()
+                .map_err(|e| AppError::AiServiceError(format!("轮询 codeagent-wrapper 状态失败: {}", e)))?
+            {
+                break status;
+            }
+
+            if let Some(cancel_fut) = cancel_rx.as_mut() {
+                tokio::select! {
+                    _ = cancel_fut => {
+                        if let Err(e) = child.kill().await {
+                            warn!(error = %e, "Failed to kill codeagent-wrapper after cancellation");
+                        }
+                        return Err(AppError::Cancelled("codeagent-wrapper cancelled".to_string()));
+                    }
+                    _ = sleep(Duration::from_millis(50)) => {}
+                }
+            } else {
+                sleep(Duration::from_millis(50)).await;
+            }
+        };
+
+        let stdout_bytes = collect_process_output(stdout_task).await?;
+        let stderr_bytes = collect_process_output(stderr_task).await?;
+        let stdout = String::from_utf8_lossy(&stdout_bytes).into_owned();
+        let stderr = String::from_utf8_lossy(&stderr_bytes).into_owned();
+        let exit_code = exit_status.code().unwrap_or(-1);
 
         debug!(
             exit_code,
@@ -544,7 +607,22 @@ impl AiService {
     }
 }
 
-#[derive(Debug, Clone)]
+async fn collect_process_output(
+    task: Option<tokio::task::JoinHandle<AppResult<Vec<u8>>>>,
+) -> AppResult<Vec<u8>> {
+    if let Some(handle) = task {
+        match handle.await {
+            Ok(res) => res,
+            Err(e) => Err(AppError::AiServiceError(format!(
+                "收集子进程输出失败: {}",
+                e
+            ))),
+        }
+    } else {
+        Ok(Vec::new())
+    }
+}
+
 struct CodeagentRunSpec {
     task: String,
     backend: String,
@@ -558,7 +636,7 @@ struct CodeagentRunSpec {
     codex_model: Option<String>,
     env: Vec<(String, String)>,
     code_cli_changed: Option<bool>,
-    
+    cancel_rx: Option<oneshot::Receiver<()>>,
 }
 
 #[derive(Debug, Clone)]

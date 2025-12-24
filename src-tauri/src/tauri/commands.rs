@@ -6,13 +6,20 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::Duration;
 use std::sync::{Arc, Mutex};
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 use tauri::{AppHandle, Manager, State};
 use tracing::{error, info, debug};
 use tauri::async_runtime;
-use crate::core::AppState;
+use tokio::sync::oneshot;
+use crate::core::{AppState, app::StreamingTaskHandle};
 use crate::services::ai::{AiChatOptions, AiService};
 use crate::services::chat_session::{self, ChatMessage};
+use crate::utils::error::AppError;
 use super::event_handlers::emit_ai_response;
+
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
 
 /// Send chat message to AI
 #[tauri::command]
@@ -73,6 +80,7 @@ pub async fn send_chat_message_streaming(
     // let app_handle_clone = app_handle.clone();
     let request_id = uuid::Uuid::new_v4().to_string();
     let request_id_for_task = request_id.clone();
+    let (cancel_tx, cancel_rx) = oneshot::channel::<()>();
 
     // 将实际消息处理与流式发送放到后台任务中，避免阻塞当前命令
     let msg = message.clone();
@@ -103,6 +111,7 @@ pub async fn send_chat_message_streaming(
                     workspace_dir: workspace_dir_for_task,
                     code_cli_changed: code_cli_changed_flag,
                     env: config.env_vars.clone(),
+                    cancel_rx: Some(cancel_rx),
                 },
             )
             .await
@@ -183,21 +192,28 @@ pub async fn send_chat_message_streaming(
                 }
             }
             Err(e) => {
-                error!("Failed to build AI response for streaming: {}", e);
-                let _ = emit_ai_response(
-                    &app_handle_for_task,
-                    &request_id_for_spawn,
-                    &format!("[AI 错误] {}", e),
-                    true,
-                    None,
-                    workspace_id_for_append.as_deref(),
-                    None,
-                );
+                if matches!(e, AppError::Cancelled(_)) {
+                    debug!(
+                        request_id = %request_id_for_spawn,
+                        "AI streaming cancelled before completion"
+                    );
+                } else {
+                    error!("Failed to build AI response for streaming: {}", e);
+                    let _ = emit_ai_response(
+                        &app_handle_for_task,
+                        &request_id_for_spawn,
+                        &format!("[AI 错误] {}", e),
+                        true,
+                        None,
+                        workspace_id_for_append.as_deref(),
+                        None,
+                    );
+                }
             }
         }
     });
 
-    let handle_entry = Arc::new(Mutex::new(Some(join_handle)));
+    let handle_entry = Arc::new(StreamingTaskHandle::new(join_handle, cancel_tx));
     {
         let state = app_handle.state::<AppState>();
         state
@@ -209,16 +225,22 @@ pub async fn send_chat_message_streaming(
 
     let cleanup_handle = app_handle.clone();
     let request_id_for_cleanup = request_id_for_task.clone();
+    let handle_entry_for_cleanup = handle_entry.clone();
     async_runtime::spawn(async move {
         if let Some(handle) = {
-            let mut guard = handle_entry.lock().unwrap();
+            let mut guard = handle_entry_for_cleanup.join_handle.lock().unwrap();
             guard.take()
         } {
             let _ = handle.await;
         }
+        handle_entry_for_cleanup.cancel_tx.lock().unwrap().take();
         let app_state = cleanup_handle.state::<AppState>();
         let mut tasks = app_state.streaming_tasks.lock().unwrap();
-        tasks.remove(&request_id_for_cleanup);
+        if let Some(current) = tasks.get(&request_id_for_cleanup) {
+            if Arc::ptr_eq(current, &handle_entry_for_cleanup) {
+                tasks.remove(&request_id_for_cleanup);
+            }
+        }
     });
 
     // 立即把 request_id 返回给前端，前端可用它在 Chat Messages Area 中关联消息
@@ -268,8 +290,8 @@ pub async fn cancel_streaming_request(
     };
 
     if let Some(handle_entry) = handle_entry {
-        if let Some(handle) = handle_entry.lock().unwrap().take() {
-            handle.abort();
+        if let Some(cancel_tx) = handle_entry.cancel_tx.lock().unwrap().take() {
+            let _ = cancel_tx.send(());
         }
         Ok(())
     } else {
@@ -288,6 +310,10 @@ pub async fn execute_command(
 
     async_runtime::spawn_blocking(move || {
         let mut cmd = std::process::Command::new(&command);
+        #[cfg(windows)]
+        {
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
         cmd.args(&args);
 
         if let Some(dir) = cwd {

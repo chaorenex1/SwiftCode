@@ -5,6 +5,7 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use tauri::async_runtime::JoinHandle;
+use tokio::sync::oneshot;
 use tauri::{App, AppHandle, Manager, State};
 
 use crate::utils::error::AppResult;
@@ -13,6 +14,20 @@ use crate::services::terminal::TerminalService;
 
 /// Application state shared across the application
 #[derive(Debug)]
+pub struct StreamingTaskHandle {
+    pub join_handle: Mutex<Option<JoinHandle<()>>>,
+    pub cancel_tx: Mutex<Option<oneshot::Sender<()>>>,
+}
+
+impl StreamingTaskHandle {
+    pub fn new(handle: JoinHandle<()>, cancel_tx: oneshot::Sender<()>) -> Self {
+        Self {
+            join_handle: Mutex::new(Some(handle)),
+            cancel_tx: Mutex::new(Some(cancel_tx)),
+        }
+    }
+}
+
 pub struct AppState {
     /// Application handle
     pub app_handle: AppHandle,
@@ -23,7 +38,7 @@ pub struct AppState {
     /// Terminal service for managing terminal sessions
     pub terminal: TerminalService,
     /// Active streaming tasks for cancellation
-    pub streaming_tasks: Mutex<HashMap<String, Arc<Mutex<Option<JoinHandle<()>>>>>>,
+    pub streaming_tasks: Mutex<HashMap<String, Arc<StreamingTaskHandle>>>,
 }
 
 impl AppState {
