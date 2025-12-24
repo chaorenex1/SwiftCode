@@ -1,73 +1,25 @@
 <script setup lang="ts">
-import { ElForm, ElFormItem, ElInput, ElButton, ElMessage } from 'element-plus';
-import { ref, onMounted } from 'vue';
-import { getSettings, saveSettings as saveTauriSettings } from '@/services/tauri/commands';
+import { ElForm, ElFormItem, ElInput, ElButton } from 'element-plus';
+import { computed } from 'vue';
+import {saveSettings as saveTauriSettings } from '@/services/tauri/commands';
+import { useAppStore } from '@/stores';
+import { showSuccess, showError } from '@/utils/toast';
+
+const appStore = useAppStore();
 
 // CLI tool paths
-const cliPaths = ref({
-  nodejs: '/usr/bin/node',
-  python: '/usr/bin/python3',
-  git: '/usr/bin/git',
-});
+const cliPaths = computed(() => appStore.settings.paths);
 
 // Save settings
 async function saveSettings() {
   try {
-    const settingsToSave: Record<string, any> = {
-      'cli.nodejs': cliPaths.value.nodejs,
-      'cli.python': cliPaths.value.python,
-      'cli.git': cliPaths.value.git,
-    };
-
-    await saveTauriSettings(settingsToSave);
-    ElMessage.success('CLI 工具路径已保存');
+    await saveTauriSettings(JSON.stringify(appStore.settings));
+    showSuccess('CLI 工具路径已保存');
   } catch (error) {
     console.error('Failed to save CLI paths:', error);
-    ElMessage.error('保存失败: ' + (error as Error).message);
+    showError('保存失败: ' + (error as Error).message);
   }
 }
-
-// Reset to defaults
-async function resetSettings() {
-  if (confirm('确定要重置 CLI 工具路径为默认值吗？')) {
-    try {
-      cliPaths.value = {
-        nodejs: '/usr/bin/node',
-        python: '/usr/bin/python3',
-        git: '/usr/bin/git',
-      };
-      await saveSettings();
-      ElMessage.success('已重置为默认值');
-    } catch (error) {
-      console.error('Failed to reset CLI paths:', error);
-      ElMessage.error('重置失败: ' + (error as Error).message);
-    }
-  }
-}
-
-// Load settings
-async function loadSettings() {
-  try {
-    const settings = await getSettings();
-
-    if (settings['cli.nodejs']) {
-      cliPaths.value.nodejs = settings['cli.nodejs'];
-    }
-    if (settings['cli.python']) {
-      cliPaths.value.python = settings['cli.python'];
-    }
-    if (settings['cli.git']) {
-      cliPaths.value.git = settings['cli.git'];
-    }
-  } catch (error) {
-    console.error('Failed to load CLI paths:', error);
-    ElMessage.warning('加载设置失败，使用默认值');
-  }
-}
-
-onMounted(() => {
-  loadSettings();
-});
 </script>
 
 <template>
@@ -80,26 +32,17 @@ onMounted(() => {
     <div class="settings-content bg-surface rounded-lg border border-border p-6 shadow-sm mt-6">
       <ElForm label-width="120px">
         <ElFormItem label="Node.js">
-          <ElInput
-            v-model="cliPaths.nodejs"
-            placeholder="例: /usr/bin/node 或 node"
-          />
+          <ElInput v-model="cliPaths.nodejs" placeholder="例: /usr/bin/node 或 node" />
           <div class="text-sm text-gray-500 mt-1">Node.js 可执行文件路径</div>
         </ElFormItem>
 
         <ElFormItem label="Python">
-          <ElInput
-            v-model="cliPaths.python"
-            placeholder="例: /usr/bin/python3 或 python"
-          />
+          <ElInput v-model="cliPaths.python" placeholder="例: /usr/bin/python3 或 python" />
           <div class="text-sm text-gray-500 mt-1">Python 可执行文件路径</div>
         </ElFormItem>
 
         <ElFormItem label="Git">
-          <ElInput
-            v-model="cliPaths.git"
-            placeholder="例: /usr/bin/git 或 git"
-          />
+          <ElInput v-model="cliPaths.git" placeholder="例: /usr/bin/git 或 git" />
           <div class="text-sm text-gray-500 mt-1">Git 可执行文件路径</div>
         </ElFormItem>
       </ElForm>
@@ -107,15 +50,8 @@ onMounted(() => {
 
     <!-- Action Buttons -->
     <div class="flex items-center justify-end space-x-4 mt-6">
-      <ElButton @click="resetSettings">
-        恢复默认
-      </ElButton>
-      <ElButton
-        type="primary"
-        @click="saveSettings"
-      >
-        保存设置
-      </ElButton>
+      <!-- <ElButton @click="resetSettings"> 恢复默认 </ElButton> -->
+      <ElButton type="primary" @click="saveSettings"> 保存设置 </ElButton>
     </div>
   </div>
 </template>

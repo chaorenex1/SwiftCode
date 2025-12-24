@@ -10,10 +10,15 @@
 
 use tauri::Manager;
 use tracing::info;
+use std::sync::{
+    Arc,
+    atomic::AtomicBool,
+};
 
 mod config;
 mod core;
 mod database;
+mod migration;
 mod services;
 #[path = "tauri/mod.rs"]
 mod tauri_module;
@@ -41,39 +46,47 @@ fn main() {
 
         // Register Tauri commands
         .invoke_handler(tauri::generate_handler![
-            tauri_module::commands::read_file,
-            tauri_module::commands::write_file,
-            tauri_module::commands::list_files,
-            tauri_module::commands::create_file,
-            tauri_module::commands::delete_file,
-            tauri_module::commands::rename_file,
-            tauri_module::commands::create_directory,
-            tauri_module::commands::list_directories,
-            tauri_module::commands::delete_directory,
+            tauri_module::fs_command::read_file,
+            tauri_module::fs_command::read_max_file,
+            tauri_module::fs_command::write_file,
+            tauri_module::fs_command::list_files,
+            tauri_module::fs_command::create_file,
+            tauri_module::fs_command::delete_file,
+            tauri_module::fs_command::rename_file,
+            tauri_module::fs_command::create_directory,
+            tauri_module::fs_command::list_directories,
+            tauri_module::fs_command::delete_directory,
             tauri_module::commands::send_chat_message,
             tauri_module::commands::send_chat_message_streaming,
-            tauri_module::commands::get_ai_models,
-            tauri_module::commands::set_ai_model,
+            tauri_module::commands::cancel_streaming_request,
+            tauri_module::commands::save_clipboard_image,
             tauri_module::commands::execute_command,
             tauri_module::commands::execute_terminal_command,
             tauri_module::commands::spawn_terminal,
             tauri_module::commands::kill_terminal,
-            tauri_module::commands::get_settings,
-            tauri_module::commands::save_settings,
-            tauri_module::commands::reset_settings,
-            tauri_module::commands::get_setting,
-            tauri_module::commands::save_setting,
-            tauri_module::commands::get_settings_by_category,
+            tauri_module::settings_commands::get_settings,
+            tauri_module::settings_commands::save_settings,
+            tauri_module::settings_commands::reset_settings,
+            tauri_module::settings_commands::get_setting,
+            tauri_module::settings_commands::save_setting,
+            tauri_module::settings_commands::get_settings_by_category,
             tauri_module::commands::add_recent_directory,
             tauri_module::commands::get_recent_directories,
             tauri_module::commands::clear_recent_directories,
-            tauri_module::commands::get_workspaces,
-            tauri_module::commands::create_workspace,
-            tauri_module::commands::switch_workspace,
-            tauri_module::commands::delete_workspace,
+            tauri_module::workspace_command::get_workspaces,
+            tauri_module::workspace_command::get_workspace,
+            tauri_module::workspace_command::get_current_workspace,
+            tauri_module::workspace_command::create_workspace,
+            tauri_module::workspace_command::switch_workspace,
+            tauri_module::workspace_command::delete_workspace,
             tauri_module::commands::get_system_info,
             tauri_module::commands::get_logs,
             tauri_module::commands::clear_logs,
+            tauri_module::chat_session_commands::save_chat_session,
+            tauri_module::chat_session_commands::load_chat_sessions,
+            tauri_module::chat_session_commands::delete_chat_session,
+            tauri_module::chat_session_commands::update_chat_session_name,
+            tauri_module::notification_commands::show_system_notification,
         ])
 
         // Setup application state
@@ -87,8 +100,20 @@ fn main() {
             // Initialize database connection
             database::connection::init(app)?;
 
+            // Initialize system notification manager
+            core::notification_manager::init(app)?;
+
+            let is_quitting = Arc::new(AtomicBool::new(false));
+
+            // Initialize system tray
+            core::tray::init_tray(app, is_quitting.clone())?;
+
+            // Register window events in a single place
+            core::window_event_manager::WindowEventManager::new(is_quitting)
+                .register(app)?;
+
             // Register event handlers
-            tauri_module::events::register_event_handlers(app)?;
+            tauri_module::event_handlers::register_event_handlers(app)?;
 
             info!("Application setup completed successfully");
             Ok(())

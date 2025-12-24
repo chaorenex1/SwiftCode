@@ -3,230 +3,16 @@
 //! This module defines Tauri IPC commands that can be called from the frontend.
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
-use serde::{Deserialize, Serialize};
-use tauri::{State, AppHandle};
-use tracing::{error, info};
+use std::sync::{Arc, Mutex};
+use tauri::{AppHandle, Manager, State};
+use tracing::{error, info, debug};
 use tauri::async_runtime;
-
-use crate::config::AppConfig;
 use crate::core::AppState;
-use super::events::emit_ai_response;
-
-/// File entry for directory listing
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FileEntry {
-    pub name: String,
-    pub path: String,
-    pub is_directory: bool,
-    pub size: u64,
-    pub modified: Option<String>,
-}
-
-/// Workspace information returned to frontend
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkspaceInfo {
-    pub id: String,
-    pub name: String,
-    pub path: String,
-    #[serde(rename = "createdAt")]
-    pub created_at: String,
-    #[serde(rename = "updatedAt")]
-    pub updated_at: String,
-}
-
-fn workspaces_file_path(config: &AppConfig) -> PathBuf {
-    let mut path = PathBuf::from(&config.app.data_dir);
-    path.push("workspaces.json");
-    path
-}
-
-fn load_workspaces(config: &AppConfig) -> Result<Vec<WorkspaceInfo>, String> {
-    let path = workspaces_file_path(config);
-
-    if !path.exists() {
-        // 初始化一个默认工作区
-        let now = chrono::Utc::now().to_rfc3339();
-        let default = WorkspaceInfo {
-            id: "default".to_string(),
-            name: "default".to_string(),
-            path: config.app.data_dir.clone(),
-            created_at: now.clone(),
-            updated_at: now,
-        };
-
-        save_workspaces(config, &[default.clone()])?;
-        return Ok(vec![default]);
-    }
-
-    let data = fs::read(&path).map_err(|e| e.to_string())?;
-    if data.is_empty() {
-        return Ok(Vec::new());
-    }
-
-    serde_json::from_slice(&data).map_err(|e| e.to_string())
-}
-
-fn save_workspaces(config: &AppConfig, workspaces: &[WorkspaceInfo]) -> Result<(), String> {
-    let path = workspaces_file_path(config);
-
-    if let Some(parent) = path.parent() {
-        if !parent.exists() {
-            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
-        }
-    }
-
-    let data = serde_json::to_vec_pretty(workspaces).map_err(|e| e.to_string())?;
-    fs::write(path, data).map_err(|e| e.to_string())
-}
-
-/// Read file content
-#[tauri::command]
-pub async fn read_file(path: String) -> Result<String, String> {
-    info!("Reading file: {}", path);
-    // 先检查元数据，避免将目录或超大文件直接读入内存导致应用卡死
-    let metadata = fs::metadata(&path).map_err(|e| {
-        error!("Failed to stat file {}: {:?}", path, e);
-        e.to_string()
-    })?;
-
-    if metadata.is_dir() {
-        return Err("指定路径是目录，无法作为文件读取".to_string());
-    }
-
-    // 简单限制文件大小，避免一次性读取超大文件导致前端/后端卡死
-    const MAX_FILE_SIZE: u64 = 8 * 1024 * 1024; // 8MB
-    if metadata.len() > MAX_FILE_SIZE {
-        let msg = format!(
-            "文件过大（{} 字节），当前最大支持 {} 字节，请在外部编辑器中打开",
-            metadata.len(), MAX_FILE_SIZE
-        );
-        error!("{} - path: {}", msg, path);
-        return Err(msg);
-    }
-
-    // 在阻塞线程池中读取文件，避免阻塞异步运行时
-    let read_path = path.clone();
-    let bytes = async_runtime::spawn_blocking(move || fs::read(&read_path))
-        .await
-        .map_err(|e| {
-            let msg = format!("Failed to join blocking read task for {}: {:?}", path, e);
-            error!("{}", msg);
-            msg
-        })?
-        .map_err(|e| {
-            // 额外输出错误日志以便调试
-            error!("Failed to read file {}: {:?}", path, e);
-            e.to_string()
-        })?;
-
-    let content = String::from_utf8_lossy(&bytes).to_string();
-    Ok(content)
-}
-
-/// Write file content
-#[tauri::command]
-pub async fn write_file(path: String, content: String) -> Result<(), String> {
-    info!("Writing file: {}", path);
-    fs::write(&path, content).map_err(|e| e.to_string())
-}
-
-/// List files in directory
-#[tauri::command]
-pub async fn list_files(path: String) -> Result<Vec<FileEntry>, String> {
-    info!("Listing files in: {}", path);
-
-    let entries = fs::read_dir(&path).map_err(|e| e.to_string())?;
-    let mut files = Vec::new();
-
-    for entry in entries {
-        let entry = entry.map_err(|e| e.to_string())?;
-        let metadata = entry.metadata().map_err(|e| e.to_string())?;
-        let path_buf = entry.path();
-
-        files.push(FileEntry {
-            name: entry.file_name().to_string_lossy().to_string(),
-            path: path_buf.to_string_lossy().to_string(),
-            is_directory: metadata.is_dir(),
-            size: metadata.len(),
-            modified: metadata.modified().ok().map(|t| {
-                let datetime: chrono::DateTime<chrono::Utc> = t.into();
-                datetime.to_rfc3339()
-            }),
-        });
-    }
-
-    // Sort: directories first, then by name
-    files.sort_by(|a, b| {
-        match (a.is_directory, b.is_directory) {
-            (true, false) => std::cmp::Ordering::Less,
-            (false, true) => std::cmp::Ordering::Greater,
-            _ => a.name.to_lowercase().cmp(&b.name.to_lowercase()),
-        }
-    });
-
-    Ok(files)
-}
-
-/// Create file
-#[tauri::command]
-pub async fn create_file(path: String) -> Result<(), String> {
-    info!("Creating file: {}", path);
-    fs::File::create(&path).map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-/// Delete file
-#[tauri::command]
-pub async fn delete_file(path: String) -> Result<(), String> {
-    info!("Deleting file: {}", path);
-    let path = Path::new(&path);
-    if path.is_dir() {
-        fs::remove_dir_all(path).map_err(|e| e.to_string())
-    } else {
-        fs::remove_file(path).map_err(|e| e.to_string())
-    }
-}
-
-/// Rename file
-#[tauri::command]
-pub async fn rename_file(old_path: String, new_path: String) -> Result<(), String> {
-    info!("Renaming file: {} -> {}", old_path, new_path);
-    fs::rename(&old_path, &new_path).map_err(|e| e.to_string())
-}
-
-/// Create directory
-#[tauri::command]
-pub async fn create_directory(path: String) -> Result<(), String> {
-    info!("Creating directory: {}", path);
-    fs::create_dir_all(&path).map_err(|e| e.to_string())
-}
-
-/// List directories
-#[tauri::command]
-pub async fn list_directories(path: String) -> Result<Vec<String>, String> {
-    info!("Listing directories in: {}", path);
-
-    let entries = fs::read_dir(&path).map_err(|e| e.to_string())?;
-    let mut dirs = Vec::new();
-
-    for entry in entries {
-        let entry = entry.map_err(|e| e.to_string())?;
-        if entry.file_type().map_err(|e| e.to_string())?.is_dir() {
-            dirs.push(entry.file_name().to_string_lossy().to_string());
-        }
-    }
-
-    Ok(dirs)
-}
-
-/// Delete directory
-#[tauri::command]
-pub async fn delete_directory(path: String) -> Result<(), String> {
-    info!("Deleting directory: {}", path);
-    fs::remove_dir_all(&path).map_err(|e| e.to_string())
-}
+use crate::services::ai::{AiChatOptions, AiService};
+use crate::services::chat_session::{self, ChatMessage};
+use super::event_handlers::emit_ai_response;
 
 /// Send chat message to AI
 #[tauri::command]
@@ -234,55 +20,13 @@ pub async fn send_chat_message(
     message: String,
     context_files: Option<Vec<String>>,
 ) -> Result<String, String> {
-    info!("Sending chat message: {}", message);
+    debug!("Sending chat message: {}", message);
 
-    // NOTE: 这里仍然是占位实现，只是演示如何携带关联文件信息
-    let snippet_limit: usize = 200;
-    let mut file_summaries = Vec::new();
-
-    if let Some(files) = &context_files {
-        for path in files.iter().take(8) {
-            // 为了避免阻塞，这里只尝试快速读取一小段内容，不影响主线程
-            let path_clone = path.clone();
-            let result = async_runtime::spawn_blocking(move || fs::read_to_string(&path_clone)).await;
-
-            match result {
-                Ok(Ok(content)) => {
-                    let preview: String = if content.len() > snippet_limit {
-                        format!("{}...", &content[..snippet_limit])
-                    } else {
-                        content
-                    };
-                    file_summaries.push(format!("- {}\n{}", path, preview));
-                }
-                Ok(Err(e)) => {
-                    error!("Failed to read context file {}: {:?}", path, e);
-                    file_summaries.push(format!("- {} (读取失败: {})", path, e));
-                }
-                Err(e) => {
-                    error!("Failed to join blocking task for context file {}: {:?}", path, e);
-                    file_summaries.push(format!("- {} (读取任务失败)", path));
-                }
-            }
-        }
-    }
-
-    let base = format!(
-        "AI Response: Received your message about '{}'.",
-        if message.len() > 50 { &message[..50] } else { &message }
-    );
-
-    let response = if file_summaries.is_empty() {
-        base
-    } else {
-        format!(
-            "{}\n\nAssociated files (preview):\n{}",
-            base,
-            file_summaries.join("\n\n")
-        )
-    };
-
-    Ok(response)
+    // Use AiService as the single entry; internally it calls codeagent-wrapper.
+    let ai = AiService::new();
+    ai.send_message(&message, context_files)
+        .await
+        .map_err(|e| e.to_string())
 }
 
 /// Send chat message to AI with simulated streaming response
@@ -291,25 +35,84 @@ pub async fn send_chat_message_streaming(
     app_handle: AppHandle,
     message: String,
     context_files: Option<Vec<String>>,
+    code_cli: Option<String>,
+    codex_model: Option<String>,
+    session_id: Option<String>,
+    workspace_id: Option<String>,
+    workspace_dir: Option<String>,
+    code_cli_changed: Option<bool>,
+    code_cli_task_id: Option<String>,
 ) -> Result<String, String> {
-    info!("Sending chat message (streaming): {}", message);
+    debug!("Sending chat message (streaming): {}", message);
+    debug!(
+        code_cli = ?code_cli,
+        session_id = ?session_id,
+        codex_model = ?codex_model,
+        code_cli_changed = ?code_cli_changed,
+        code_cli_task_id = ?code_cli_task_id,
+        "Streaming chat options"
+    );
+    // let db = crate::database::connection::get_db_connection(&app_handle)
+    //     .await
+    //     .map_err(|e| e.to_string())?;
+    
+    // let workspace_id_parsed = workspace_id
+    //     .as_ref()
+    //     .and_then(|id| id.parse::<i32>().ok())
+    //     .ok_or_else(|| "Invalid workspace_id".to_string())?;
+    
+    // let workspace = crate::database::repositories::workspace_repository::WorkspaceRepository::get_by_id(&db, &workspace_id_parsed)
+    //     .await
+    //     .map_err(|e| e.to_string())?
+    //     .ok_or_else(|| "Workspace not found".to_string())?;
 
-    // 为本次会话生成唯一 request_id，前端用它关联流式回复
+    // 生成session_id
+    let session_id = session_id.unwrap_or(uuid::Uuid::new_v4().to_string());
+    debug!("Session ID: {}", session_id);
+    let config = crate::core::app::get_config(app_handle.state::<AppState>());
+    // let app_handle_clone = app_handle.clone();
     let request_id = uuid::Uuid::new_v4().to_string();
     let request_id_for_task = request_id.clone();
-    let app_handle_clone = app_handle.clone();
 
     // 将实际消息处理与流式发送放到后台任务中，避免阻塞当前命令
     let msg = message.clone();
     let ctx_files = context_files.clone();
+    let msg_for_spawn = msg.clone();
 
-    async_runtime::spawn(async move {
-        // 复用现有的 send_chat_message 逻辑构造完整回复
-        match send_chat_message(msg, ctx_files).await {
-            Ok(full_response) => {
-                let chars: Vec<char> = full_response.chars().collect();
+    let workspace_id_for_append = workspace_id.clone();
+    let code_cli_for_task = code_cli.clone();
+    let code_cli_for_append = code_cli.clone();
+    let codex_model_for_task = codex_model.clone();
+    let workspace_dir_for_task = workspace_dir.clone();
+    let code_cli_task_id_for_resume = code_cli_task_id.clone();
+    let code_cli_changed_flag = code_cli_changed;
+
+    let app_handle_for_task = app_handle.clone();
+    let request_id_for_spawn = request_id_for_task.clone();
+    let join_handle = async_runtime::spawn(async move {
+        let ai = AiService::new();
+        match ai
+            .send_message_with_options(
+                &msg,
+                ctx_files,
+                AiChatOptions {
+                    code_cli: code_cli_for_task,
+                    resume_session_id: code_cli_task_id_for_resume,
+                    parallel: false,
+                    codex_model: codex_model_for_task,
+                    workspace_dir: workspace_dir_for_task,
+                    code_cli_changed: code_cli_changed_flag,
+                    env: config.env_vars.clone(),
+                },
+            )
+            .await
+        {   
+            Ok(result) => {
+                debug!("AI response: {}", result.message);
+                let chars: Vec<char> = result.message.chars().collect();
                 let total = chars.len();
                 let mut buffer = String::new();
+                let mut full_response = String::new();
 
                 for (idx, ch) in chars.into_iter().enumerate() {
                     buffer.push(ch);
@@ -320,11 +123,21 @@ pub async fn send_chat_message_streaming(
                         let delta = buffer.clone();
                         buffer.clear();
 
+                        let codeagent_session_id = if is_last {
+                            result.codeagent_session_id.clone()
+                        } else {
+                            None
+                        };
+                        full_response.push_str(&delta);
+
                         if let Err(e) = emit_ai_response(
-                            &app_handle_clone,
-                            &request_id_for_task,
+                            &app_handle_for_task,
+                            &request_id_for_spawn,
                             &delta,
                             is_last,
+                            Some(&session_id),
+                            workspace_id_for_append.as_deref(),
+                            codeagent_session_id.as_deref(),
                         ) {
                             error!("Failed to emit AI response chunk: {:?}", e);
                             break;
@@ -334,63 +147,134 @@ pub async fn send_chat_message_streaming(
                         std::thread::sleep(Duration::from_millis(60));
                     }
                 }
+                
+                if let Some(task_id) = result.codeagent_session_id.clone() {
+                    let user_message = ChatMessage {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        role: "user".to_string(),
+                        content: msg_for_spawn.clone(),
+                        timestamp: chrono::Local::now().to_rfc3339().to_string(),
+                        files: None,
+                        session_id: Some(session_id.clone()),
+                        workspace_id: workspace_id_for_append.clone(),
+                        model: None,
+                    };
+                    let assistant_message = ChatMessage {
+                        id: request_id_for_spawn.clone(),
+                        role: "assistant".to_string(),
+                        content: full_response,
+                        timestamp: chrono::Local::now().to_rfc3339(),
+                        files: None,
+                        session_id: Some(session_id.clone()),
+                        workspace_id: workspace_id_for_append.clone(),
+                        model: None,
+                    };
+                    if let Err(e) = chat_session::append_message_to_session(
+                        &session_id,
+                        vec![user_message, assistant_message],
+                        code_cli_for_append.clone(),
+                        Some(task_id.clone()),
+                    ) {
+                        error!(
+                            "Failed to append chat messages to session {}: {}",
+                            session_id, e
+                        );
+                    }
+                }
             }
             Err(e) => {
                 error!("Failed to build AI response for streaming: {}", e);
                 let _ = emit_ai_response(
-                    &app_handle_clone,
-                    &request_id_for_task,
+                    &app_handle_for_task,
+                    &request_id_for_spawn,
                     &format!("[AI 错误] {}", e),
                     true,
+                    None,
+                    workspace_id_for_append.as_deref(),
+                    None,
                 );
             }
         }
+    });
+
+    let handle_entry = Arc::new(Mutex::new(Some(join_handle)));
+    {
+        let state = app_handle.state::<AppState>();
+        state
+            .streaming_tasks
+            .lock()
+            .unwrap()
+            .insert(request_id_for_task.clone(), handle_entry.clone());
+    }
+
+    let cleanup_handle = app_handle.clone();
+    let request_id_for_cleanup = request_id_for_task.clone();
+    async_runtime::spawn(async move {
+        if let Some(handle) = {
+            let mut guard = handle_entry.lock().unwrap();
+            guard.take()
+        } {
+            let _ = handle.await;
+        }
+        let app_state = cleanup_handle.state::<AppState>();
+        let mut tasks = app_state.streaming_tasks.lock().unwrap();
+        tasks.remove(&request_id_for_cleanup);
     });
 
     // 立即把 request_id 返回给前端，前端可用它在 Chat Messages Area 中关联消息
     Ok(request_id)
 }
 
-/// Get available AI models (ordered with current default model first)
+/// Save clipboard image to a temporary file and return its absolute path
 #[tauri::command]
-pub async fn get_ai_models(state: State<'_, AppState>) -> Result<Vec<String>, String> {
-    info!("Getting AI models");
-
-    // 当前支持的模型列表，可以后续改为从配置中动态加载
-    let mut models = vec![
-        "claude-3-5-sonnet".to_string(),
-        "gpt-4".to_string(),
-        "gpt-3.5-turbo".to_string(),
-        "gemini-pro".to_string(),
-    ];
-
-    // 将配置中的默认模型放到列表首位，方便前端直接使用 aiModels[0]
-    if let Ok(cfg) = state.config.lock() {
-        let current = &cfg.ai.default_model;
-        if let Some(pos) = models.iter().position(|m| m == current) {
-            if pos != 0 {
-                models.swap(0, pos);
-            }
-        }
+pub async fn save_clipboard_image(
+    app_handle: AppHandle,
+    file_name: Option<String>,
+    bytes: Vec<u8>,
+) -> Result<String, String> {
+    if bytes.is_empty() {
+        return Err("Clipboard image data is empty".to_string());
     }
 
-    Ok(models)
+    let mut dir = app_handle
+        .path()
+        .app_cache_dir()
+        .map_err(|e| format!("Failed to resolve cache directory: {}", e))?;
+    dir.push("clipboard-images");
+
+    if let Err(err) = fs::create_dir_all(&dir) {
+        return Err(format!("Failed to prepare clipboard directory: {}", err));
+    }
+
+    let generated_name = format!("codex-clipboard-{}.png", uuid::Uuid::new_v4());
+    let final_name = file_name.unwrap_or(generated_name);
+    let file_path = dir.join(final_name);
+
+    fs::write(&file_path, bytes).map_err(|e| format!("Failed to write clipboard image: {}", e))?;
+
+    Ok(file_path.to_string_lossy().to_string())
 }
 
-/// Set current AI model and persist to configuration
+/// Cancel an in-flight streaming request by request_id
 #[tauri::command]
-pub async fn set_ai_model(state: State<'_, AppState>, model: String) -> Result<(), String> {
-    info!("Setting AI model to: {}", model);
+pub async fn cancel_streaming_request(
+    app_handle: AppHandle,
+    request_id: String,
+) -> Result<(), String> {
+    let handle_entry = {
+        let state = app_handle.state::<AppState>();
+        let mut tasks = state.streaming_tasks.lock().unwrap();
+        tasks.remove(&request_id)
+    };
 
-    {
-        // 更新内存中的配置
-        let mut cfg = state.config.lock().map_err(|e| e.to_string())?;
-        cfg.ai.default_model = model.clone();
-        // 同步写入配置文件
-        crate::config::save_config(&cfg).map_err(|e| e.to_string())?;
+    if let Some(handle_entry) = handle_entry {
+        if let Some(handle) = handle_entry.lock().unwrap().take() {
+            handle.abort();
+        }
+        Ok(())
+    } else {
+        Err("Streaming request not found or already finished".to_string())
     }
-
-    Ok(())
 }
 
 /// Execute command in terminal
@@ -402,40 +286,44 @@ pub async fn execute_command(
 ) -> Result<String, String> {
     info!("Executing command: {} {:?}", command, args);
 
-    let mut cmd = std::process::Command::new(&command);
-    cmd.args(&args);
+    async_runtime::spawn_blocking(move || {
+        let mut cmd = std::process::Command::new(&command);
+        cmd.args(&args);
 
-    if let Some(dir) = cwd {
-        cmd.current_dir(dir);
-    }
+        if let Some(dir) = cwd {
+            cmd.current_dir(dir);
+        }
 
-    let output = cmd.output().map_err(|e| e.to_string())?;
-    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
-    let stderr = String::from_utf8_lossy(&output.stderr).to_string();
+        let output = cmd.output().map_err(|e| e.to_string())?;
+        let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
 
-    if !stderr.is_empty() {
-        error!("Command stderr: {}", stderr);
-    }
+        if !stderr.is_empty() {
+            error!("Command stderr: {}", stderr);
+        }
 
-    Ok(stdout)
+        Ok::<String, String>(stdout)
+    })
+    .await
+    .map_err(|e| format!("执行命令任务失败: {}", e))?
 }
 
 /// Execute a command in an existing terminal session
 #[tauri::command]
 pub async fn execute_terminal_command(
     state: State<'_, AppState>,
-    sessionId: String,
+    session_id: String,
     shell: String,
     command: String,
 ) -> Result<String, String> {
     info!(
         "Executing terminal command in session {} with shell {}: {}",
-        sessionId, shell, command
+        session_id, shell, command
     );
 
     state
         .terminal
-        .execute_command(&sessionId, &shell, &command)
+        .execute_command(&session_id, &shell, &command)
         .map_err(|e| e.to_string())
 }
 
@@ -459,127 +347,6 @@ pub async fn kill_terminal(state: State<'_, AppState>, terminal_id: String) -> R
         .terminal
         .kill_session(&terminal_id)
         .map_err(|e| e.to_string())
-}
-
-/// Get application settings
-#[tauri::command]
-pub async fn get_settings(state: State<'_, AppState>) -> Result<AppConfig, String> {
-    info!("Getting application settings");
-    let config = state.config.lock().map_err(|e| e.to_string())?;
-    Ok(config.clone())
-}
-
-/// Save application settings
-#[tauri::command]
-pub async fn save_settings(
-    state: State<'_, AppState>,
-    config: AppConfig,
-) -> Result<(), String> {
-    info!("Saving application settings");
-
-    crate::config::save_config(&config).map_err(|e| e.to_string())?;
-
-    // Update state
-    let mut state_config = state.config.lock().map_err(|e| e.to_string())?;
-    *state_config = config;
-
-    Ok(())
-}
-
-/// Reset settings to defaults
-#[tauri::command]
-pub async fn reset_settings(state: State<'_, AppState>) -> Result<AppConfig, String> {
-    info!("Resetting settings to defaults");
-
-    let default_config = AppConfig::default();
-    crate::config::save_config(&default_config).map_err(|e| e.to_string())?;
-
-    // Update state
-    let mut state_config = state.config.lock().map_err(|e| e.to_string())?;
-    *state_config = default_config.clone();
-
-    Ok(default_config)
-}
-
-/// Get workspaces (persisted under data_dir/workspaces.json)
-#[tauri::command]
-pub async fn get_workspaces(state: State<'_, AppState>) -> Result<Vec<WorkspaceInfo>, String> {
-    info!("Getting workspaces");
-
-    let cfg = state.config.lock().map_err(|e| e.to_string())?;
-    load_workspaces(&cfg)
-}
-
-/// Create workspace and persist to workspaces.json
-#[tauri::command]
-pub async fn create_workspace(state: State<'_, AppState>, name: String) -> Result<(), String> {
-    info!("Creating workspace: {}", name);
-
-    let cfg = state.config.lock().map_err(|e| e.to_string())?;
-    let mut list = load_workspaces(&cfg)?;
-
-    if list.iter().any(|w| w.name == name) {
-        return Ok(()); // 已存在则忽略
-    }
-
-    let now = chrono::Utc::now().to_rfc3339();
-    let id = uuid::Uuid::new_v4().to_string();
-
-    let mut path = PathBuf::from(&cfg.app.data_dir);
-    path.push("workspaces");
-    path.push(&name);
-
-    let path_str = path.to_string_lossy().to_string();
-    // 尝试创建目录（失败不致命）
-    let _ = fs::create_dir_all(&path);
-
-    let ws = WorkspaceInfo {
-        id,
-        name,
-        path: path_str,
-        created_at: now.clone(),
-        updated_at: now,
-    };
-
-    list.push(ws);
-    save_workspaces(&cfg, &list)?;
-    Ok(())
-}
-
-/// Switch workspace: only update default in config for now
-#[tauri::command]
-pub async fn switch_workspace(state: State<'_, AppState>, name: String) -> Result<(), String> {
-    info!("Switching to workspace: {}", name);
-
-    let mut cfg = state.config.lock().map_err(|e| e.to_string())?;
-    let list = load_workspaces(&cfg)?;
-    if !list.iter().any(|w| w.name == name) {
-        return Err(format!("Workspace not found: {}", name));
-    }
-
-    cfg.workspace.default_workspace = name;
-    crate::config::save_config(&cfg).map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-/// Delete workspace from workspaces.json (does not delete files on disk)
-#[tauri::command]
-pub async fn delete_workspace(state: State<'_, AppState>, name: String) -> Result<(), String> {
-    info!("Deleting workspace: {}", name);
-
-    let mut cfg = state.config.lock().map_err(|e| e.to_string())?;
-    let mut list = load_workspaces(&cfg)?;
-
-    list.retain(|w| w.name != name);
-    save_workspaces(&cfg, &list)?;
-
-    // 如果删除的是默认工作区，则回退到 "default"
-    if cfg.workspace.default_workspace == name {
-        cfg.workspace.default_workspace = "default".to_string();
-        crate::config::save_config(&cfg).map_err(|e| e.to_string())?;
-    }
-
-    Ok(())
 }
 
 /// Get system information
@@ -609,32 +376,38 @@ pub async fn get_system_info() -> Result<serde_json::Value, String> {
 /// Get application logs from the configured log file
 #[tauri::command]
 pub async fn get_logs(state: State<'_, AppState>, limit: Option<usize>) -> Result<Vec<String>, String> {
-    info!("Getting application logs");
-
-    let cfg = state.config.lock().map_err(|e| e.to_string())?;
-    let mut path = PathBuf::from(&cfg.logging.log_file_path);
-    path.push(&cfg.logging.log_file_name);
-
-    if !path.exists() {
-        return Ok(Vec::new());
-    }
-
-    use std::io::{BufRead, BufReader};
-
-    let file = fs::File::open(&path).map_err(|e| e.to_string())?;
-    let reader = BufReader::new(file);
-    let mut lines: Vec<String> = reader
-        .lines()
-        .filter_map(|l| l.ok())
-        .collect();
-
-    if let Some(limit) = limit {
-        if lines.len() > limit {
-            lines = lines.split_off(lines.len() - limit);
+    let date = chrono::Local::now().format("%Y-%m-%d");
+    let path = {
+        let cfg = state.config.lock().map_err(|e| e.to_string())?;
+        let mut p = PathBuf::from(&cfg.logging.log_file_path);
+        let filename = format!("{}.{}", cfg.logging.log_file_name, date);
+        p.push(&filename);
+        p
+    };
+    async_runtime::spawn_blocking(move || {
+        if !path.exists() {
+            return Ok(Vec::new());
         }
-    }
 
-    Ok(lines)
+        use std::io::{BufRead, BufReader};
+
+        let file = fs::File::open(&path).map_err(|e| e.to_string())?;
+        let reader = BufReader::new(file);
+        let mut lines: Vec<String> = reader
+            .lines()
+            .filter_map(|l| l.ok())
+            .collect();
+
+        if let Some(limit) = limit {
+            if lines.len() > limit {
+                lines = lines.split_off(lines.len() - limit);
+            }
+        }
+
+        Ok::<Vec<String>, String>(lines)
+    })
+    .await
+    .map_err(|e| format!("读取日志任务失败: {}", e))?
 }
 
 /// Clear application logs by truncating the log file
@@ -642,104 +415,21 @@ pub async fn get_logs(state: State<'_, AppState>, limit: Option<usize>) -> Resul
 pub async fn clear_logs(state: State<'_, AppState>) -> Result<(), String> {
     info!("Clearing application logs");
 
-    let cfg = state.config.lock().map_err(|e| e.to_string())?;
-    let mut path = PathBuf::from(&cfg.logging.log_file_path);
-    path.push(&cfg.logging.log_file_name);
+    let path = {
+        let cfg = state.config.lock().map_err(|e| e.to_string())?;
+        let mut p = PathBuf::from(&cfg.logging.log_file_path);
+        p.push(&cfg.logging.log_file_name);
+        p
+    };
 
-    if path.exists() {
-        fs::write(&path, "").map_err(|e| e.to_string())?;
-    }
-
-    Ok(())
-}
-
-/// Get a single setting by key
-#[tauri::command]
-pub async fn get_setting(app: AppHandle, key: String) -> Result<Option<serde_json::Value>, String> {
-    info!("Getting setting: {}", key);
-
-    let db = crate::database::connection::get_db_connection(&app)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let setting = crate::database::repositories::settings_repository::SettingsRepository::get_by_key(&db, &key)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    Ok(setting.map(|s| {
-        serde_json::from_str(&s.value)
-            .unwrap_or(serde_json::Value::String(s.value))
-    }))
-}
-
-/// Save a single setting
-#[tauri::command]
-pub async fn save_setting(
-    app: AppHandle,
-    key: String,
-    value: serde_json::Value,
-    category: Option<String>,
-) -> Result<(), String> {
-    info!("Saving setting: {}", key);
-
-    let db = crate::database::connection::get_db_connection(&app)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let value_str = serde_json::to_string(&value).map_err(|e| e.to_string())?;
-
-    // Determine category from key prefix if not provided
-    let cat = category.unwrap_or_else(|| {
-        if key.starts_with("app.") {
-            "app"
-        } else if key.starts_with("user.") {
-            "user"
-        } else if key.starts_with("workspace.") {
-            "workspace"
-        } else if key.starts_with("ai.") {
-            "ai"
-        } else {
-            "general"
-        }.to_string()
-    });
-
-    crate::database::repositories::settings_repository::SettingsRepository::upsert(
-        &db,
-        &key,
-        &value_str,
-        &cat,
-        None,
-    )
+    async_runtime::spawn_blocking(move || {
+        if path.exists() {
+            fs::write(&path, "").map_err(|e| e.to_string())?;
+        }
+        Ok::<(), String>(())
+    })
     .await
-    .map_err(|e| e.to_string())?;
-
-    Ok(())
-}
-
-/// Get settings by category
-#[tauri::command]
-pub async fn get_settings_by_category(
-    app: AppHandle,
-    category: String,
-) -> Result<serde_json::Value, String> {
-    info!("Getting settings for category: {}", category);
-
-    let db = crate::database::connection::get_db_connection(&app)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let settings = crate::database::repositories::settings_repository::SettingsRepository::get_by_category(&db, &category)
-        .await
-        .map_err(|e| e.to_string())?;
-
-    let mut settings_map = serde_json::Map::new();
-    for setting in settings {
-        let value: serde_json::Value = serde_json::from_str(&setting.value)
-            .unwrap_or(serde_json::Value::String(setting.value.clone()));
-        settings_map.insert(setting.key, value);
-    }
-
-    Ok(serde_json::Value::Object(settings_map))
+    .map_err(|e| format!("清除日志任务失败: {}", e))?
 }
 
 /// Add a recent directory

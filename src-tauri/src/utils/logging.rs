@@ -35,6 +35,8 @@ pub fn init_tracing(app: &mut App) -> Result<()> {
 
     // 日志级别
     let env_filter = EnvFilter::new(&cfg.log_level);
+    //sqlx::query
+    // let sqlx_filter = EnvFilter::new("sqlx::query=info");
 
     // === 文件输出 ===
     let max_size = (&cfg.log_file_rotation.log_file_max_size_mb * 1024 * 1024) as u64;
@@ -73,6 +75,7 @@ pub fn init_tracing(app: &mut App) -> Result<()> {
     // Use try_init to avoid panic if already initialized
     match tracing_subscriber::registry()
         .with(env_filter)
+        // .with(sqlx_filter)
         .with(stdout_layer)
         .with(file_layer)
         .try_init() {

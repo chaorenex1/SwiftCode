@@ -3,13 +3,14 @@
 //! This module handles database connections and connection pooling.
 
 use std::sync::Arc;
-use tauri::{App, AppHandle, Manager, State};
+use tauri::{App, AppHandle, Manager};
 use tracing::{error, info};
 
 use sea_orm::{ConnectOptions, Database, DatabaseConnection};
 use tokio::sync::Mutex;
 
 use crate::config::schema::AppConfig;
+use crate::migration;
 use crate::utils::error::{AppError, AppResult};
 
 /// Database connection pool wrapper
@@ -44,7 +45,7 @@ impl DatabasePool {
         opt.max_connections(max_connections)
             .min_connections(min_connections)
             .sqlx_logging(true)
-            .sqlx_logging_level(tracing::log::LevelFilter::Info);
+            .sqlx_logging_level(tracing::log::LevelFilter::Debug);
 
         info!("Connecting to database: {}", database_url);
 
@@ -87,7 +88,7 @@ pub fn init(app: &mut App) -> AppResult<()> {
     tauri::async_runtime::spawn(async move {
         match get_db_connection(&app_handle).await {
             Ok(db) => {
-                if let Err(e) = crate::database::migrations::run_migrations(&db).await {
+                if let Err(e) = migration::run_migrations(&db).await {
                     error!("Failed to run database migrations: {}", e);
                 } else {
                     info!("Database migrations completed successfully");

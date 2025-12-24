@@ -58,17 +58,11 @@ pub fn emit_terminal_output(app_handle: &AppHandle, terminal_id: &str, output: &
         .map_err(|e| AppError::TauriError(e))
 }
 
-/// Emit AI response event (supports streaming chunks)
-pub fn emit_ai_response(
-    app_handle: &AppHandle,
-    request_id: &str,
-    delta: &str,
-    done: bool,
-) -> AppResult<()> {
+/// Emit AI response event
+pub fn emit_ai_response(app_handle: &AppHandle, request_id: &str, response: &str) -> AppResult<()> {
     let payload = serde_json::json!({
         "request_id": request_id,
-        "delta": delta,
-        "done": done,
+        "response": response,
         "timestamp": chrono::Utc::now().to_rfc3339(),
     });
 

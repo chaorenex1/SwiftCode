@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { ElButton, ElButtonGroup } from 'element-plus';
-import { computed } from 'vue';
+// import { computed } from 'vue';
 
 import ChatPanel from '@/components/chat/ChatPanel.vue';
 import OutputPanel from '@/components/output/OutputPanel.vue';
 import TerminalPanel from '@/components/terminal/TerminalPanel.vue';
-import { useAppStore } from '@/stores/workspaceStore';
+import { useAppStore, useFileStore } from '@/stores';
 
 interface BottomTab {
   key: string;
@@ -18,8 +18,6 @@ const props = defineProps<{
   activeTab: string;
   visible: boolean;
   height: number;
-  showFileExplorer: boolean;
-  sidebarWidth: number;
 }>();
 
 const emit = defineEmits<{
@@ -28,20 +26,9 @@ const emit = defineEmits<{
 }>();
 
 const appStore = useAppStore();
+const fileStore = useFileStore();
 
-const FOOTER_HEIGHT = 32;
-
-const bottomPanelStyle = computed(() => ({
-  height: props.height + 'px',
-  left: props.showFileExplorer ? props.sidebarWidth + 4 + 'px' : '0',
-  bottom: FOOTER_HEIGHT + 'px',
-}));
-
-const toggleBarStyle = computed(() => ({
-  left: props.showFileExplorer ? props.sidebarWidth + 4 + 'px' : '0',
-  // 面板可见时：切换条在面板上方；隐藏时：紧贴 footer 上方
-  bottom: (props.visible ? props.height + FOOTER_HEIGHT : FOOTER_HEIGHT) + 'px',
-}));
+// const currentFile = computed(() => fileStore.currentFile);
 
 function onToggleVisible() {
   emit('update:visible', !props.visible);
@@ -53,12 +40,9 @@ function onSelectTab(key: string) {
 </script>
 
 <template>
-  <div>
-    <!-- Bottom Panel Toggle -->
-    <div
-      class="border-t border-border bg-surface px-4 py-1 toggle-bar"
-      :style="toggleBarStyle"
-    >
+  <div class="flex flex-col flex-shrink-0">
+    <!-- Bottom Panel Toggle Bar -->
+    <div class="border-t border-border bg-surface px-4 py-1 flex-shrink-0">
       <div class="flex items-center justify-between">
         <ElButtonGroup>
           <ElButton
@@ -66,6 +50,7 @@ function onSelectTab(key: string) {
             :key="tab.key"
             :type="props.activeTab === tab.key ? 'primary' : 'default'"
             :icon="tab.icon"
+            size="small"
             @click="onSelectTab(tab.key)"
           >
             {{ tab.label }}
@@ -74,6 +59,7 @@ function onSelectTab(key: string) {
 
         <ElButton
           :icon="props.visible ? 'ArrowDown' : 'ArrowUp'"
+          size="small"
           text
           @click="onToggleVisible"
         >
@@ -82,28 +68,30 @@ function onSelectTab(key: string) {
       </div>
     </div>
 
-    <!-- Bottom Panel -->
+    <!-- Bottom Panel Content -->
     <div
       v-if="props.visible"
-      class="border-t border-border overflow-hidden bottom-panel"
-      :style="bottomPanelStyle"
+      class="border-t border-border bg-background overflow-hidden flex-shrink-0"
+      :style="{ height: props.height + 'px' }"
     >
       <ChatPanel v-if="props.activeTab === 'chat'" />
       <OutputPanel v-else-if="props.activeTab === 'output'" />
       <TerminalPanel v-else-if="props.activeTab === 'terminal'" />
     </div>
 
-    <!-- Footer 状态信息-->
-    <div class="border-t border-border bg-surface px-4 py-2 text-sm text-text-secondary footer-bar">
+    <!-- Footer Status Bar -->
+    <div
+      class="border-t border-border bg-surface px-4 py-2 text-sm text-text-secondary flex-shrink-0"
+    >
       <div class="flex items-center justify-between">
         <div class="flex items-center space-x-4">
-          <span>工作区: {{ appStore.currentWorkspace }}</span>
+          <span>工作区: {{ appStore.currentWorkspace.name }}</span>
           <span>|</span>
-          <span>文件: {{ appStore.currentFile || '未选择文件' }}</span>
+          <span>文件: {{ fileStore.getCurrentFile?.path || '未选择文件' }}</span>
         </div>
 
         <div class="flex items-center space-x-4">
-          <span>AI模型: {{ appStore.currentAiModel }}</span>
+          <span>AI模型:{{ appStore.currentAiModel }}</span>
           <span>|</span>
           <span>状态: {{ appStore.isConnected ? '已连接' : '未连接' }}</span>
         </div>
@@ -113,20 +101,5 @@ function onSelectTab(key: string) {
 </template>
 
 <style scoped>
-.bottom-panel {
-  position: fixed;
-  right: 0;
-}
-
-.toggle-bar {
-  position: fixed;
-  right: 0;
-}
-
-.footer-bar {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-}
+/* 所有样式都移除，使用 flex 布局代替 fixed 定位 */
 </style>

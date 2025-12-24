@@ -1,48 +1,42 @@
 <script setup lang="ts">
 import { Plus, Delete, Edit } from '@element-plus/icons-vue';
-import {
-  ElButton,
-  ElTable,
-  ElTableColumn,
-  ElDialog,
-  ElForm,
-  ElFormItem,
-  ElInput,
-  ElMessage,
-} from 'element-plus';
-import { ref, onMounted } from 'vue';
-import { getSettings, saveSettings as saveTauriSettings } from '@/services/tauri/commands';
+import { ElButton, ElTable, ElTableColumn, ElDialog, ElForm, ElFormItem, ElInput, ElMessageBox } from 'element-plus';
+import { ref,computed } from 'vue';
+import { saveSettings as saveTauriSettings } from '@/services/tauri/commands';
+import { useAppStore } from '@/stores';
+import type { CodeCli } from '@/utils/types';
+import { showSuccess, showError, showWarning } from '@/utils/toast';
 
+const appStore = useAppStore();
 // Code CLIs
-const codeClis = ref([
-  { name: 'OpenAI-Codex', command: '/usr/bin/codex', args: '--model gpt-4' },
-  { name: 'Local-Coder', command: '/usr/local/bin/coder', args: '--local' },
-]);
+const codeClis = computed(() => {
+  return appStore.settings.codeCli
+});
 
-const newCodeCli = ref({ name: '', command: '', args: '' });
+const newCodeCli = ref<CodeCli>({ name: '', command: '', args: '' });
 const showCodeCliDialog = ref(false);
 const editingCodeCliIndex = ref<number | null>(null);
 
 // Code CLI operations
 function addCodeCli() {
   if (!newCodeCli.value.name.trim()) {
-    ElMessage.warning('请输入CLI名称');
+    showWarning('请输入CLI名称');
     return;
   }
   if (!newCodeCli.value.command.trim()) {
-    ElMessage.warning('请输入命令路径');
+    showWarning('请输入命令路径');
     return;
   }
 
   if (editingCodeCliIndex.value !== null) {
     // 编辑模式
     codeClis.value[editingCodeCliIndex.value] = { ...newCodeCli.value };
-    ElMessage.success('Code CLI已更新');
+    showSuccess('Code CLI已更新');
     editingCodeCliIndex.value = null;
   } else {
     // 新增模式
     codeClis.value.push({ ...newCodeCli.value });
-    ElMessage.success('Code CLI已添加');
+    showSuccess('Code CLI已添加');
   }
   newCodeCli.value = { name: '', command: '', args: '' };
   showCodeCliDialog.value = false;
@@ -63,10 +57,15 @@ function editCodeCli(index: number) {
 
 function removeCodeCli(index: number) {
   const codeCli = codeClis.value[index];
-  if (confirm(`确定要删除 Code CLI "${codeCli?.name}" 吗？`)) {
-    codeClis.value.splice(index, 1);
-    ElMessage.success('Code CLI已删除');
-  }
+  ElMessageBox.confirm(`确定要删除 Code CLI "${codeCli?.name}" 吗？`, '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning',
+  })
+    .then(() => {
+      codeClis.value.splice(index, 1);
+      showSuccess('Code CLI已删除');
+    });
 }
 
 function openCodeCliDialog() {
@@ -78,56 +77,46 @@ function openCodeCliDialog() {
 // Save settings
 async function saveSettings() {
   try {
-    const settingsToSave: Record<string, any> = {};
-
-    // 保存 Code CLI 配置
-    codeClis.value.forEach((cli, index) => {
-      settingsToSave[`cli.code.${index}`] = JSON.stringify({
-        name: cli.name,
-        command: cli.command,
-        args: cli.args,
-      });
-    });
-
-    await saveTauriSettings(settingsToSave);
-    ElMessage.success('Code CLI 配置已保存');
+    console.debug('Saving settings:', appStore.settings);
+    appStore.settings.ai.code_cli = codeClis.value.map((cli) => cli.name);
+    await saveTauriSettings(JSON.stringify(appStore.settings));
+    showSuccess('Code CLI 配置已保存');
   } catch (error) {
     console.error('Failed to save Code CLIs:', error);
-    ElMessage.error('保存失败: ' + (error as Error).message);
+    showError('保存失败: ' + (error as Error).message);
   }
 }
 
-// Load settings
-async function loadSettings() {
-  try {
-    const settings = await getSettings();
+// // Load settings
+// async function loadSettings() {
+//   try {
+//     const settings = await getSettings();
 
-    // 加载 Code CLI 配置
-    const loadedCodeClis: typeof codeClis.value = [];
-    Object.keys(settings).forEach(key => {
-      if (key.startsWith('cli.code.')) {
-        const cliData = typeof settings[key] === 'string'
-          ? JSON.parse(settings[key])
-          : settings[key];
-        loadedCodeClis.push({
-          name: cliData.name || '',
-          command: cliData.command || '',
-          args: cliData.args || '',
-        });
-      }
-    });
-    if (loadedCodeClis.length > 0) {
-      codeClis.value = loadedCodeClis;
-    }
-  } catch (error) {
-    console.error('Failed to load Code CLIs:', error);
-    ElMessage.warning('加载设置失败，使用默认值');
-  }
-}
+//     // 加载 Code CLI 配置
+//     const loadedCodeClis: typeof codeClis.value = [];
+//     Object.keys(settings).forEach((key) => {
+//       if (key.startsWith('cli.code.')) {
+//         const cliData =
+//           typeof settings[key] === 'string' ? JSON.parse(settings[key]) : settings[key];
+//         loadedCodeClis.push({
+//           name: cliData.name || '',
+//           command: cliData.command || '',
+//           args: cliData.args || '',
+//         });
+//       }
+//     });
+//     if (loadedCodeClis.length > 0) {
+//       codeClis.value = loadedCodeClis;
+//     }
+//   } catch (error) {
+//     console.error('Failed to load Code CLIs:', error);
+//     showWarning('加载设置失败，使用默认值');
+//   }
+// }
 
-onMounted(() => {
-  loadSettings();
-});
+// onMounted(() => {
+//   loadSettings();
+// });
 </script>
 
 <template>
@@ -138,50 +127,18 @@ onMounted(() => {
           <h2 class="text-2xl font-bold">Code CLI 管理</h2>
           <p class="text-gray-500 mt-2">配置和管理代码辅助 CLI 工具</p>
         </div>
-        <ElButton
-          type="primary"
-          :icon="Plus"
-          @click="openCodeCliDialog"
-        >
-          添加 Code CLI
-        </ElButton>
+        <ElButton type="primary" :icon="Plus" @click="openCodeCliDialog"> 添加 Code CLI </ElButton>
       </div>
     </div>
 
     <div class="settings-content bg-surface rounded-lg border border-border p-6 shadow-sm mt-6">
-      <ElTable
-        v-if="codeClis.length > 0"
-        :data="codeClis"
-        style="width: 100%"
-      >
-        <ElTableColumn
-          prop="name"
-          label="CLI名称"
-          width="200"
-        />
-        <ElTableColumn
-          prop="command"
-          label="命令路径"
-        />
-        <ElTableColumn
-          prop="args"
-          label="参数"
-          width="200"
-        />
-        <ElTableColumn
-          label="操作"
-          width="150"
-          align="center"
-        >
+      <ElTable v-if="codeClis.length > 0" :data="codeClis" style="width: 100%">
+        <ElTableColumn prop="name" label="CLI名称" width="200" />
+        <ElTableColumn prop="command" label="命令路径" />
+        <ElTableColumn prop="args" label="参数" width="200" />
+        <ElTableColumn label="操作" width="150" align="center">
           <template #default="{ $index }">
-            <ElButton
-              size="small"
-              :icon="Edit"
-              text
-              @click="editCodeCli($index)"
-            >
-              编辑
-            </ElButton>
+            <ElButton size="small" :icon="Edit" text @click="editCodeCli($index)"> 编辑 </ElButton>
             <ElButton
               size="small"
               type="danger"
@@ -199,12 +156,7 @@ onMounted(() => {
 
     <!-- Action Buttons -->
     <div class="flex items-center justify-end space-x-4 mt-6">
-      <ElButton
-        type="primary"
-        @click="saveSettings"
-      >
-        保存设置
-      </ElButton>
+      <ElButton type="primary" @click="saveSettings"> 保存设置 </ElButton>
     </div>
 
     <!-- Dialog -->
@@ -213,10 +165,7 @@ onMounted(() => {
       :title="editingCodeCliIndex !== null ? '编辑 Code CLI' : '添加 Code CLI'"
       width="500px"
     >
-      <ElForm
-        :model="newCodeCli"
-        label-width="100px"
-      >
+      <ElForm :model="newCodeCli" label-width="100px">
         <ElFormItem label="CLI名称">
           <ElInput v-model="newCodeCli.name" placeholder="例: OpenAI-Codex" />
         </ElFormItem>
@@ -230,10 +179,7 @@ onMounted(() => {
       <template #footer>
         <span class="dialog-footer">
           <ElButton @click="showCodeCliDialog = false">取消</ElButton>
-          <ElButton
-            type="primary"
-            @click="addCodeCli"
-          >确定</ElButton>
+          <ElButton type="primary" @click="addCodeCli">确定</ElButton>
         </span>
       </template>
     </ElDialog>

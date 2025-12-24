@@ -4,12 +4,14 @@
   "description": "A desktop application with code editor, AI chat assistant, CLI output and terminal functionality",
   "private": true,
   "scripts": {
+    "install": "pnpm --dir frontend install",
     "dev": "pnpm --dir frontend dev",
     "build": "pnpm --dir frontend build",
     "preview": "pnpm --dir frontend preview",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "fetch:codeagent-wrapper": "node scripts/fetch-codeagent-wrapper.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.0.0"

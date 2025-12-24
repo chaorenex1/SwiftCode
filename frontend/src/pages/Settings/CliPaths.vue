@@ -16,13 +16,7 @@ function goBack() {
         <h2 class="text-2xl font-bold">CLI 工具路径设置</h2>
         <p class="text-sm text-gray-500 mt-2">配置各种 CLI 工具的路径</p>
       </div>
-      <button
-        type="button"
-        class="back-button"
-        @click="goBack"
-      >
-        返回
-      </button>
+      <button type="button" class="back-button" @click="goBack">返回</button>
     </div>
     <div class="settings-page-content">
       <CliPathsSettings />

@@ -1,16 +1,26 @@
 <script setup lang="ts">
 import { Menu, Setting, Folder, Message, Document } from '@element-plus/icons-vue';
-import { ElContainer, ElHeader, ElMain, ElMessage } from 'element-plus';
-import { ref, onMounted } from 'vue';
+import {
+  ElContainer,
+  ElHeader,
+  ElMain,
+  ElDropdown,
+  ElDropdownMenu,
+  ElDropdownItem,
+} from 'element-plus';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
+import { showError, showSuccess } from '@/utils/toast';
 
-import { useFileStore } from '@/stores/filesStore';
-import { addRecentDirectory, getRecentDirectories, type RecentDirectory } from '@/services/tauri/commands';
+import { useAppStore, useFileStore,useChatStore } from '@/stores';
 import MainSidebar from '@/components/layout/MainSidebar.vue';
 import EditorArea from '@/components/layout/EditorArea.vue';
 import BottomTabs from '@/components/layout/BottomTabs.vue';
+import type { Workspace } from '@/utils/types';
 
+const appStore = useAppStore();
 const fileStore = useFileStore();
+const chatStore = useChatStore();
 const router = useRouter();
 
 // Panel visibility & layout
@@ -18,7 +28,12 @@ const showFileExplorer = ref(true);
 const showBottomPanel = ref(true);
 const sidebarWidth = ref(256);
 // 固定底部面板高度（像素），避免位置随窗口变化上下浮动
-const bottomPanelHeight = 300;
+const bottomPanelHeight = 500;
+
+// Sidebar resize state
+const isResizingSidebar = ref(false);
+let sidebarStartX = 0;
+let sidebarStartWidth = 0;
 
 // Bottom panel tabs
 const bottomTabs = [
@@ -30,7 +45,11 @@ const bottomTabs = [
 const activeBottomTab = ref('chat');
 
 // Recent directories
-const recentDirectories = ref<RecentDirectory[]>([]);
+const recentDirectories = computed(() => {
+  return appStore.workspaces.filter(
+    (workspace) => workspace.path && workspace.path !== fileStore.getRootDirectory
+  );
+});
 
 // Toggle panels
 function toggleFileExplorer() {
@@ -38,36 +57,44 @@ function toggleFileExplorer() {
 }
 
 // Sidebar resize handlers
-// function onSidebarResizeStart(event: MouseEvent) {
-//   isResizingSidebar.value = true;
-//   sidebarStartX = event.clientX;
-//   sidebarStartWidth = sidebarWidth.value;
+function onSidebarResizeStart(event: MouseEvent) {
+  isResizingSidebar.value = true;
+  sidebarStartX = event.clientX;
+  sidebarStartWidth = sidebarWidth.value;
 
-//   document.addEventListener('mousemove', onSidebarResizing);
-//   document.addEventListener('mouseup', onSidebarResizeEnd);
-// }
+  document.addEventListener('mousemove', onSidebarResizing);
+  document.addEventListener('mouseup', onSidebarResizeEnd);
 
-// function onSidebarResizing(event: MouseEvent) {
-//   if (!isResizingSidebar.value) return;
+  // 防止文本选择
+  event.preventDefault();
+}
 
-//   const delta = event.clientX - sidebarStartX;
-//   const minWidth = 180;
-//   const maxWidth = 480;
-//   let nextWidth = sidebarStartWidth + delta;
+function onSidebarResizing(event: MouseEvent) {
+  if (!isResizingSidebar.value) return;
 
-//   if (nextWidth < minWidth) nextWidth = minWidth;
-//   if (nextWidth > maxWidth) nextWidth = maxWidth;
+  const delta = event.clientX - sidebarStartX;
+  const minWidth = 180;
+  const maxWidth = 600;
+  let nextWidth = sidebarStartWidth + delta;
 
-//   sidebarWidth.value = nextWidth;
-// }
+  if (nextWidth < minWidth) nextWidth = minWidth;
+  if (nextWidth > maxWidth) nextWidth = maxWidth;
 
-// function onSidebarResizeEnd() {
-//   if (!isResizingSidebar.value) return;
+  sidebarWidth.value = nextWidth;
+}
 
-//   isResizingSidebar.value = false;
-//   document.removeEventListener('mousemove', onSidebarResizing);
-//   document.removeEventListener('mouseup', onSidebarResizeEnd);
-// }
+function onSidebarResizeEnd() {
+  if (!isResizingSidebar.value) return;
+
+  isResizingSidebar.value = false;
+  document.removeEventListener('mousemove', onSidebarResizing);
+  document.removeEventListener('mouseup', onSidebarResizeEnd);
+}
+
+// Handle sidebar width update from MainSidebar
+function onSidebarWidthUpdate(newWidth: number) {
+  sidebarWidth.value = newWidth;
+}
 
 // Open settings page
 function openSettings() {
@@ -75,37 +102,70 @@ function openSettings() {
 }
 
 // Load recent directories from backend
-async function loadRecentDirectories() {
-  try {
-    const directories = await getRecentDirectories();
-    recentDirectories.value = directories;
-  } catch (error) {
-    console.error('加载最近目录失败', error);
-    recentDirectories.value = [];
-  }
-}
+// async function loadRecentDirectories() {
+//   try {
+//     recentDirectories.value = appStore.workspaces.filter(
+//       (workspace) => workspace.path && workspace.path !== fileStore.getRootDirectory
+//     );
+//   } catch (error) {
+//     console.error('加载最近目录失败', error);
+//     recentDirectories.value = [];
+//   }
+// }
 
 // Open a recent directory from header dropdown
-async function openRecentDirectoryFromHeader(dir: RecentDirectory) {
+async function openRecentDirectoryFromHeader(dir: Workspace) {
   try {
+    // 先设置根目录
+    fileStore.setRootDirectory(dir.path);
+    // 加载目录内容，这会触发 FileExplorer 的 watch 更新
     await fileStore.loadDirectory(dir.path);
-    await addRecentDirectory(dir.path);
-    router.push('/dashboard');
+    // 切换工作区
+    await appStore.switchWorkspace(dir.id);
+    // 清空聊天记录
+    chatStore.clearChat();
+
+    showSuccess(`已切换到工作区: ${dir.name}`);
   } catch (error) {
-    ElMessage.error('打开目录失败: ' + (error as Error).message);
+    showError((error as Error).message || '打开目录失败', '打开目录失败');
     console.error('打开目录失败', error);
   }
 }
 
-function handleSelectRecentDirectory(command: RecentDirectory) {
+function handleSelectRecentDirectory(command: Workspace) {
   if (command && command.path) {
     openRecentDirectoryFromHeader(command);
   }
 }
 
 onMounted(() => {
-  loadRecentDirectories();
+  // loadRecentDirectories();
+
+  // Listen for switch-to-terminal event from FileExplorer
+  window.addEventListener('switch-to-terminal', handleSwitchToTerminal);
 });
+
+onUnmounted(() => {
+  // Clean up event listener
+  window.removeEventListener('switch-to-terminal', handleSwitchToTerminal);
+});
+
+// Handle switching to terminal tab from FileExplorer
+function handleSwitchToTerminal(event: Event) {
+  event.preventDefault();
+  const customEvent = event as CustomEvent;
+  activeBottomTab.value = 'terminal';
+  showBottomPanel.value = true;
+
+  // Emit event to TerminalPanel to open terminal in the specified path
+  if (customEvent.detail?.path) {
+    window.dispatchEvent(
+      new CustomEvent('open-terminal-in-path', {
+        detail: { path: customEvent.detail.path },
+      })
+    );
+  }
+}
 </script>
 
 <template>
@@ -114,20 +174,12 @@ onMounted(() => {
     <ElHeader class="flex items-center justify-between border-b border-border bg-surface px-4">
       <div class="flex items-center space-x-4">
         <div class="flex items-center space-x-2">
-          <img
-            src="/vite.svg"
-            class="h-8 w-8"
-            alt="Logo"
-          >
+          <img src="/vite.svg" class="h-8 w-8" alt="Logo" />
           <span class="text-lg font-semibold">Code AI Assistant</span>
         </div>
 
         <div class="flex items-center space-x-2">
-          <el-button
-            :icon="Menu"
-            text
-            @click="toggleFileExplorer"
-          >
+          <el-button :icon="Menu" text @click="toggleFileExplorer">
             {{ showFileExplorer ? '隐藏导航' : '显示导航' }}
           </el-button>
         </div>
@@ -143,23 +195,17 @@ onMounted(() => {
             <el-icon class="mr-1">
               <Folder />
             </el-icon>
-            <span class="recent-dropdown-label">
-              最近目录
-            </span>
+            <span class="recent-dropdown-label"> 最近目录 </span>
           </span>
           <template #dropdown>
             <ElDropdownMenu class="recent-dropdown-menu">
-              <ElDropdownItem
-                v-for="dir in recentDirectories"
-                :key="dir.path"
-                :command="dir"
-              >
+              <ElDropdownItem v-for="dir in recentDirectories" :key="dir.path" :command="dir">
                 <div class="recent-dir-item">
                   <div class="recent-dir-path">
                     {{ dir.path }}
                   </div>
                   <div class="recent-dir-time">
-                    {{ new Date(dir.openedAt).toLocaleString('zh-CN') }}
+                    {{ new Date(dir.createdAt).toLocaleString('zh-CN') }}
                   </div>
                 </div>
               </ElDropdownItem>
@@ -168,15 +214,8 @@ onMounted(() => {
         </ElDropdown>
 
         <el-button-group>
-          <el-button
-            type="primary"
-            disabled
-          >
-            编辑器
-          </el-button>
-          <el-button
-            @click="openSettings"
-          >
+          <el-button type="primary" disabled> 编辑器 </el-button>
+          <el-button @click="openSettings">
             <el-icon><Setting /></el-icon>
             设置
           </el-button>
@@ -185,37 +224,35 @@ onMounted(() => {
     </ElHeader>
 
     <!-- Main Content -->
-    <ElContainer class="flex-1">
+    <ElContainer class="flex-1 overflow-hidden">
       <MainSidebar
         :visible="showFileExplorer"
         :width="sidebarWidth"
+        @resize-start="onSidebarResizeStart"
+        @updateWidth="onSidebarWidthUpdate"
       />
 
       <!-- Main Content Area -->
       <ElMain class="flex-1 overflow-hidden min-w-0">
         <!-- Editor View -->
-        <div
-          class="h-full flex flex-col"
-          :style="{ paddingBottom: bottomPanelHeight + 32 + 'px' }"
-        >
+        <div class="h-full flex flex-col">
           <!-- Editor Area -->
-          <EditorArea />
+          <div class="flex-1 overflow-hidden min-h-0">
+            <EditorArea />
+          </div>
 
+          <!-- Bottom Panel -->
           <BottomTabs
             :tabs="bottomTabs"
             :active-tab="activeBottomTab"
             :visible="showBottomPanel"
             :height="bottomPanelHeight"
-            :show-file-explorer="showFileExplorer"
-            :sidebar-width="sidebarWidth"
             @update:activeTab="activeBottomTab = $event"
             @update:visible="showBottomPanel = $event"
           />
         </div>
-
       </ElMain>
     </ElContainer>
-
   </ElContainer>
 </template>
 
@@ -227,10 +264,16 @@ onMounted(() => {
 
 :deep(.el-aside) {
   width: 256px;
+  overflow: hidden;
 }
 
 :deep(.el-main) {
   padding: 0;
+  overflow: hidden;
+}
+
+:deep(.el-container) {
+  overflow: hidden;
 }
 
 .recent-dropdown-trigger {

@@ -1,25 +1,69 @@
 import { invoke } from '@tauri-apps/api/core';
 
 import type {
-  FileEntry,
-  FileContent,
+  AppSettings,
+  FileItem,
   AIModel,
   Workspace,
   CommandResult,
   ApiResponse,
+  FileContent,
+  ChatSession,
+  ChatMessage,
+  BackendChatSession,
+  BackendChatMessage,
 } from '@/utils/types';
+
+export type CodeagentWrapperExecResult = {
+  stdout: string;
+  stderr: string;
+  exit_code: number;
+};
 
 // File system commands
 export async function readFile(path: string): Promise<FileContent> {
-  return invoke('read_file', { path });
+  const result = await invoke<{
+    name: string;
+    path: string;
+    content: string;
+    modified: boolean;
+    line_count: number;
+    size: number;
+  }>('read_file', { path });
+
+  // 转换为前端 FileContent 格式
+  return {
+    name: result.name,
+    path: result.path,
+    content: result.content,
+    modified: result.modified,
+    lineCount: result.line_count, // 转换蛇形到驼峰
+    size: result.size,
+  };
 }
 
 export async function writeFile(path: string, content: string): Promise<void> {
   return invoke('write_file', { path, content });
 }
 
-export async function listFiles(path: string): Promise<FileEntry[]> {
-  return invoke('list_files', { path });
+export async function listFiles(path: string): Promise<FileItem[]> {
+  const fileList = await invoke<
+    Array<{
+      name: string;
+      path: string;
+      is_directory: boolean;
+      size: number;
+      modified?: string;
+    }>
+  >('list_files', { path });
+
+  return fileList.map((file) => ({
+    name: file.name,
+    path: file.path,
+    isDirectory: file.is_directory,
+    size: file.size,
+    modified: file.modified,
+  }));
 }
 
 export async function createFile(path: string): Promise<void> {
@@ -38,7 +82,7 @@ export async function createDirectory(path: string): Promise<void> {
   return invoke('create_directory', { path });
 }
 
-export async function listDirectories(path: string): Promise<FileEntry[]> {
+export async function listDirectories(path: string): Promise<String[]> {
   return invoke('list_directories', { path });
 }
 
@@ -49,10 +93,7 @@ export async function deleteDirectory(path: string): Promise<void> {
 // AI chat commands
 // Note: backend `send_chat_message` currently returns a plain string
 // response and accepts `message` and optional `context_files`.
-export async function sendChatMessage(
-  message: string,
-  contextFiles?: string[]
-): Promise<string> {
+export async function sendChatMessage(message: string, contextFiles?: string[]): Promise<string> {
   return invoke('send_chat_message', { message, context_files: contextFiles });
 }
 
@@ -60,9 +101,26 @@ export async function sendChatMessage(
 // `ai-response` events while returning a requestId immediately.
 export async function sendChatMessageStreaming(
   message: string,
-  contextFiles?: string[]
+  contextFiles?: string[],
+  codeCli?: string,
+  codexModel?: string,
+  sessionId?: string | null,
+  workspaceId?: string,
+  workspaceDir?: string,
+  codeCliChanged?: boolean,
+  codeCliTaskId?: string | null,
 ): Promise<string> {
-  return invoke('send_chat_message_streaming', { message, context_files: contextFiles });
+  return invoke('send_chat_message_streaming', {
+    message,
+    contextFiles,
+    codeCli,
+    codexModel,
+    sessionId,
+    workspaceId,
+    workspaceDir,
+    codeCliChanged,
+    codeCliTaskId,
+  });
 }
 
 export async function getAIModels(): Promise<AIModel[]> {
@@ -82,6 +140,23 @@ export async function executeCommand(
   return invoke('execute_command', { command, args, cwd });
 }
 
+// myclaude (codeagent-wrapper) command
+export async function executeCodeagentWrapper(
+  args: string[],
+  options?: {
+    binaryPath?: string;
+    cwd?: string;
+    env?: Record<string, string>;
+  }
+): Promise<CodeagentWrapperExecResult> {
+  return invoke('execute_codeagent_wrapper', {
+    binary_path: options?.binaryPath,
+    args,
+    cwd: options?.cwd,
+    env: options?.env,
+  });
+}
+
 export async function executeTerminalCommand(
   sessionId: string,
   shell: string,
@@ -99,15 +174,15 @@ export async function spawnTerminal(cwd?: string): Promise<string> {
 }
 
 export async function killTerminal(sessionId: string): Promise<void> {
-  return invoke('kill_terminal', { terminal_id: sessionId });
+  return invoke('kill_terminal', { terminalId: sessionId });
 }
 
 // Settings commands
-export async function getSettings(): Promise<Record<string, any>> {
+export async function getSettings(): Promise<AppSettings> {
   return invoke('get_settings');
 }
 
-export async function saveSettings(settings: Record<string, any>): Promise<void> {
+export async function saveSettings(settings: string): Promise<void> {
   return invoke('save_settings', { settings });
 }
 
@@ -120,11 +195,20 @@ export async function getWorkspaces(): Promise<Workspace[]> {
   return invoke('get_workspaces');
 }
 
-export async function createWorkspace(name: string, path: string): Promise<Workspace> {
-  return invoke('create_workspace', { name, path });
+// get current workspace
+export async function getCurrentWorkspace(): Promise<Workspace> {
+  return invoke('get_current_workspace');
 }
 
-export async function switchWorkspace(workspaceId: string): Promise<void> {
+export async function createWorkspace(
+  name: string,
+  path: string,
+  isActive: boolean
+): Promise<Workspace> {
+  return invoke('create_workspace', { name, path, isActive });
+}
+
+export async function switchWorkspace(workspaceId: string): Promise<Workspace> {
   return invoke('switch_workspace', { workspaceId });
 }
 
@@ -143,6 +227,11 @@ export async function getLogs(limit?: number): Promise<string[]> {
 
 export async function clearLogs(): Promise<void> {
   return invoke('clear_logs');
+}
+
+// Notification commands
+export async function showSystemNotification(body: string, title?: string): Promise<void> {
+  return invoke('show_system_notification', { title, body });
 }
 
 // Utility commands
@@ -259,4 +348,71 @@ export async function getRecentDirectories(): Promise<RecentDirectory[]> {
 
 export async function clearRecentDirectories(): Promise<void> {
   return invoke('clear_recent_directories');
+}
+
+// Chat session commands
+function normalizeChatMessage(message: BackendChatMessage): ChatMessage {
+  return {
+    id: message.id || '',
+    role: message.role || 'assistant',
+    content: message.content || '',
+    sessionId: message.sessionId || message.session_id || '',
+    workspaceId: message.workspaceId || message.workspace_id || '',
+    timestamp: message.timestamp || '',
+    files: message.files || [],
+    model: message.model,
+    fileMetadata: message.fileMetadata || message.file_metadata,
+  };
+}
+
+function normalizeChatSession(session: BackendChatSession): ChatSession {
+  const normalizedMessages = (session.messages || []).map(normalizeChatMessage);
+  const messageCount =
+    session.messageCount ?? session.message_count ?? normalizedMessages.length;
+
+  return {
+    id: session.id,
+    name: session.name,
+    sessionId: session.sessionId || session.session_id || '',
+    workspaceId: session.workspaceId || session.workspace_id || '',
+    messages: normalizedMessages,
+    createdAt: session.createdAt || session.created_at || '',
+    updatedAt: session.updatedAt || session.updated_at || '',
+    messageCount,
+    firstMessagePreview: session.firstMessagePreview || session.first_message_preview || '',
+    codeCliTaskIds: session.codeCliTaskIds || session.code_cli_task_ids || {},
+  };
+}
+
+export async function saveChatSession(
+  sessionId: string | null,
+  name: string | null,
+  messages: ChatMessage[],
+  codeagentSessionId?: string | null
+): Promise<ChatSession> {
+  const session = await invoke<BackendChatSession>('save_chat_session', {
+    sessionId,
+    name,
+    messages,
+    codeagent_session_id: codeagentSessionId,
+  });
+  return normalizeChatSession(session);
+}
+
+export async function loadChatSessions(workspaceId: string, limit?: number): Promise<ChatSession[]> {
+  const sessions = await invoke<BackendChatSession[]>('load_chat_sessions', { workspaceId, limit });
+  return sessions.map((session) => normalizeChatSession(session));
+}
+
+export async function deleteChatSession(sessionId: string): Promise<void> {
+  return invoke('delete_chat_session', { sessionId });
+}
+
+export async function updateChatSessionName(sessionId: string, name: string): Promise<ChatSession> {
+  const session = await invoke<BackendChatSession>('update_chat_session_name', { sessionId, name });
+  return normalizeChatSession(session);
+}
+
+export async function cancelStreamingRequest(requestId: string): Promise<void> {
+  return invoke('cancel_streaming_request', { requestId });
 }

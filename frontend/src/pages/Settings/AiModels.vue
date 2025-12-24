@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router';
-import AiModelsManagement from '../../components/settings/AiModelsManagement.vue';
+import AiModelsManagement from '@/components/settings/AiModelsManagement.vue';
 
 const router = useRouter();
 
@@ -16,13 +16,7 @@ function goBack() {
         <h2 class="text-2xl font-bold">AI 模型管理</h2>
         <p class="text-sm text-gray-500 mt-2">配置和管理 AI 模型设置</p>
       </div>
-      <button
-        type="button"
-        class="back-button"
-        @click="goBack"
-      >
-        返回
-      </button>
+      <button type="button" class="back-button" @click="goBack">返回</button>
     </div>
     <div class="settings-page-content">
       <AiModelsManagement />

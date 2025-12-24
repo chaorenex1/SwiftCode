@@ -10,20 +10,14 @@ use crate::config::loader::{get_default_data_dir, get_user_home};
 pub struct AppConfig {
     /// Application settings
     pub app: AppSettings,
-    /// User settings
-    pub user: UserSettings,
     /// Database settings
     pub database: DatabaseSettings,
-    /// AI service settings
-    pub ai: AiSettings,
-    /// CLI tool settings
-    pub cli: CliToolSettings,
-    /// Workspace settings
-    pub workspace: WorkspaceSettings,
     //// Deployment settings
     pub deployment: DeploymentSettings,
     /// Logging settings
     pub logging: LoggingSettings,
+    /// Environment variables
+    pub env_vars: Vec<(String, String)>,
 }
 
 /// Application settings
@@ -38,8 +32,6 @@ pub struct AppSettings {
     /// User Home directory
     pub user_home: String,
     /// Enable debug mode
-    /// Auto save interval in seconds
-    pub auto_save_interval: Option<u32>,
     /// Auto update enabled
     pub auto_update: Option<bool>,
 }
@@ -84,14 +76,6 @@ pub struct FileRotationSettings {
     pub log_file_max_age_days: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UserSettings {
-    /// Theme (light/dark)
-    pub theme: String,
-    /// Font size
-    pub font_size: u32,
-}
-
 /// Database settings
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DatabaseSettings {
@@ -103,43 +87,6 @@ pub struct DatabaseSettings {
     pub min_connections: u32,
 }
 
-/// AI service settings
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AiSettings {
-    /// Default AI model
-    pub default_model: String,
-    /// API timeout in seconds
-    pub api_timeout: u64,
-    /// Maximum tokens
-    pub max_tokens: u32,
-    /// Temperature
-    pub temperature: f32,
-}
-
-/// CLI tool settings
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CliToolSettings {
-    /// Node.js path
-    pub nodejs_path: String,
-    /// Python path
-    pub python_path: String,
-    /// Git path
-    pub git_path: String,
-    /// Default shell
-    pub default_shell: String,
-}
-
-/// Workspace settings
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkspaceSettings {
-    /// Default workspace name
-    pub default_workspace: String,
-    /// Auto-save interval in seconds
-    pub auto_save_interval: u64,
-    /// Enable file watching
-    pub enable_file_watching: bool,
-}
-
 impl Default for AppConfig {
     fn default() -> Self {
         let data_dir = get_default_data_dir().unwrap();
@@ -149,34 +96,12 @@ impl Default for AppConfig {
                 version: "0.1.0".to_string(),
                 data_dir: data_dir.clone(),
                 user_home: get_user_home().unwrap(),
-                auto_save_interval: Some(60),
                 auto_update: Some(true),
-            },
-            user: UserSettings {
-                theme: "light".to_string(),
-                font_size: 14,
             },
             database: DatabaseSettings {
                 url: format!("sqlite://{}/app.db?mode=rwc", data_dir),
                 max_connections: 10,
                 min_connections: 1,
-            },
-            ai: AiSettings {
-                default_model: "claude-3-5-sonnet".to_string(),
-                api_timeout: 30,
-                max_tokens: 4096,
-                temperature: 0.7,
-            },
-            cli: CliToolSettings {
-                nodejs_path: "node".to_string(),
-                python_path: "python".to_string(),
-                git_path: "git".to_string(),
-                default_shell: "bash".to_string(),
-            },
-            workspace: WorkspaceSettings {
-                default_workspace: "default".to_string(),
-                auto_save_interval: 30,
-                enable_file_watching: true,
             },
             deployment: DeploymentSettings {
                 environment: "development".to_string(),
@@ -196,127 +121,7 @@ impl Default for AppConfig {
                     log_file_max_age_days: 30,
                 },
             },
-        }
-    }
-}
-
-/// Environment variable configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EnvVar {
-    /// Variable name
-    pub name: String,
-    /// Variable value
-    pub value: String,
-    /// Is secret (should be masked in UI)
-    pub is_secret: bool,
-}
-
-/// AI Model configuration for settings
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ModelConfig {
-    /// Model name
-    pub name: String,
-    /// API endpoint URL
-    pub endpoint: String,
-    /// API key (encrypted at rest)
-    pub api_key: String,
-    /// Is enabled
-    pub enabled: bool,
-}
-
-/// Code CLI configuration for settings
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct CodeCliConfig {
-    /// CLI name
-    pub name: String,
-    /// Command path
-    pub path: String,
-    /// Default arguments
-    pub args: String,
-    /// Is enabled
-    pub enabled: bool,
-}
-
-/// Workspace configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct WorkspaceConfig {
-    /// Workspace ID
-    pub id: String,
-    /// Workspace name
-    pub name: String,
-    /// Workspace root path
-    pub path: String,
-    /// Created timestamp
-    pub created_at: String,
-    /// Updated timestamp
-    pub updated_at: String,
-    /// Associated environment variables
-    pub env_vars: Vec<EnvVar>,
-    /// Associated models
-    pub models: Vec<ModelConfig>,
-    /// Associated Code CLIs
-    pub code_clis: Vec<CodeCliConfig>,
-}
-
-impl Default for WorkspaceConfig {
-    fn default() -> Self {
-        Self {
-            id: uuid::Uuid::new_v4().to_string(),
-            name: "default".to_string(),
-            path: ".".to_string(),
-            created_at: chrono::Utc::now().to_rfc3339(),
-            updated_at: chrono::Utc::now().to_rfc3339(),
-            env_vars: Vec::new(),
-            models: Vec::new(),
-            code_clis: Vec::new(),
-        }
-    }
-}
-
-/// Full settings configuration
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct SettingsConfig {
-    /// Application-wide settings
-    pub app: AppWideSettings,
-    /// List of workspaces
-    pub workspaces: Vec<WorkspaceConfig>,
-    /// Active workspace ID
-    pub active_workspace: String,
-}
-
-/// Application-wide settings
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct AppWideSettings {
-    /// Theme (light/dark)
-    pub theme: String,
-    /// Font size
-    pub font_size: u32,
-    /// Auto-save enabled
-    pub auto_save: bool,
-    /// Auto-save interval in seconds
-    pub auto_save_interval: u32,
-    /// Data directory path
-    pub data_dir: String,
-}
-
-impl Default for AppWideSettings {
-    fn default() -> Self {
-        Self {
-            theme: "light".to_string(),
-            font_size: 14,
-            auto_save: true,
-            auto_save_interval: 30,
-            data_dir: "data".to_string(),
-        }
-    }
-}
-
-impl Default for SettingsConfig {
-    fn default() -> Self {
-        Self {
-            app: AppWideSettings::default(),
-            workspaces: vec![WorkspaceConfig::default()],
-            active_workspace: "default".to_string(),
+            env_vars: vec![],
         }
     }
 }

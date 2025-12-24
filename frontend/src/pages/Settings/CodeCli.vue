@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router';
-import CodeCliManagement from '../../components/settings/CodeCliManagement.vue';
+import CodeCliManagement from '@/components/settings/CodeCliManagement.vue';
 
 const router = useRouter();
 
@@ -16,13 +16,7 @@ function goBack() {
         <h2 class="text-2xl font-bold">Code CLI 管理</h2>
         <p class="text-sm text-gray-500 mt-2">配置 Visual Studio Code CLI 工具</p>
       </div>
-      <button
-        type="button"
-        class="back-button"
-        @click="goBack"
-      >
-        返回
-      </button>
+      <button type="button" class="back-button" @click="goBack">返回</button>
     </div>
     <div class="settings-page-content">
       <CodeCliManagement />

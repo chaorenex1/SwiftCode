@@ -1,8 +1,12 @@
+import type { Terminal } from '@xterm/xterm';
+
 // Application types
 export interface Workspace {
   id: string;
   name: string;
   path: string;
+  currentSessionId: string;
+  isActive: boolean;
   createdAt: string;
   updatedAt: string;
   settings: Record<string, any>;
@@ -10,11 +14,36 @@ export interface Workspace {
 
 export interface AppSettings {
   theme: Theme;
+  colorScheme: ColorScheme;
   editor: EditorSettings;
   terminal: TerminalSettings;
   chat: ChatSettings;
   ai: AISettings;
   paths: PathSettings;
+  models: AIModel[];
+  codeCli: CodeCli[];
+  environmentVariables: EnvironmentVariable[];
+  userPreferences: UserPreference;
+}
+
+export interface EnvironmentVariable {
+  name: string;
+  value: string;
+  isSecret: boolean;
+}
+
+export interface AIModel {
+  id: string;
+  name: string;
+  provider: string;
+  endpoint: string;
+  apiKey?: string;
+}
+
+export interface CodeCli {
+  name: string;
+  command: string;
+  args: string;
 }
 
 export interface EditorSettings {
@@ -26,6 +55,7 @@ export interface EditorSettings {
   autoSave: boolean;
   autoSaveDelay: number;
   formatOnSave: boolean;
+  enableFileWatcher?: boolean;
 }
 
 export interface TerminalSettings {
@@ -39,6 +69,7 @@ export interface ChatSettings {
   autoScroll: boolean;
   markdownPreview: boolean;
   sendWithEnter: boolean;
+  switchLineWithShiftEnter: boolean;
 }
 
 export interface AISettings {
@@ -46,13 +77,14 @@ export interface AISettings {
   maxTokens: number;
   temperature: number;
   topP: number;
+  model_list?: string[];
+  code_cli?: string[];
 }
 
 export interface PathSettings {
   nodejs: string;
   python: string;
   git: string;
-  dataDirectory: string;
 }
 
 export type Theme = 'light' | 'dark';
@@ -100,6 +132,12 @@ export interface UserPreferences {
   };
 }
 
+export interface UserPreference {
+  currentModel: string;
+  currentCodeCli: string;
+  currentShell: string;
+}
+
 export type AuthState = 'idle' | 'loading' | 'authenticated' | 'error';
 
 // Theme types
@@ -131,33 +169,46 @@ export interface FileEntry {
   extension?: string;
 }
 
+export interface FileItem {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+  size?: number;
+  modified?: string;
+  created?: string;
+}
+
 export interface FileContent {
+  name: string;
+  path: string;
   content: string;
   language?: string;
+  modified: boolean;
   lineCount: number;
   size: number;
 }
 
-// AI types
-export interface AIModel {
-  id: string;
-  name: string;
-  provider: string;
-  endpoint: string;
-  apiKey?: string;
-  maxTokens: number;
-  temperature: number;
-  topP: number;
-  enabled: boolean;
+export interface SendMessageOptions {
+  content: string;
+  files: string[];
+  codeCli: string;
+  resumeSessionId?: string | '';
+  workspaceId: string;
+  workspaceDir?: string;
+  model?: string;
+  clipboardAttachments?: ClipboardAttachment[];
 }
 
 export interface ChatMessage {
   id: string;
+  sessionId: string;
+  workspaceId: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
   timestamp: string;
   files?: string[];
   model?: string;
+  fileMetadata?: Record<string, FileMetadata>;
 }
 
 export interface ChatResponse {
@@ -168,6 +219,61 @@ export interface ChatResponse {
     totalTokens: number;
   };
 }
+
+export interface ClipboardAttachment {
+  path: string;
+  width: number;
+  height: number;
+  preview?: string;
+}
+
+export interface FileMetadata {
+  width: number;
+  height: number;
+  preview?: string;
+}
+
+export interface ChatSession {
+  id: string;
+  name?: string;
+  sessionId?: string;
+  workspaceId: string;
+  messages: ChatMessage[];
+  createdAt: string;
+  updatedAt: string;
+  messageCount: number;
+  firstMessagePreview: string;
+  codeCliTaskIds?: Record<string, string>;
+}
+
+export interface AiResponseEventPayload {
+  request_id: string;
+  delta: string;
+  done: boolean;
+  session_id?: string | null;
+  workspace_id?: string | null;
+  code_cli_task_id?: string | null;
+  timestamp: string;
+}
+
+export type BackendChatMessage = Partial<ChatMessage> & {
+  session_id?: string;
+  workspace_id?: string;
+  timestamp?: string;
+  file_metadata?: Record<string, FileMetadata>;
+};
+
+export type BackendChatSession = Partial<ChatSession> & {
+  id: string;
+  messages?: BackendChatMessage[];
+  created_at?: string;
+  updated_at?: string;
+  message_count?: number;
+  first_message_preview?: string;
+  session_id?: string;
+  workspace_id?: string;
+  code_cli_task_ids?: Record<string, string>;
+};
 
 // Terminal types
 export interface TerminalSession {
@@ -220,6 +326,13 @@ export interface ApiResponse<T = any> {
   data?: T;
   error?: string;
   message?: string;
+}
+
+export interface TerminalTab {
+  id: string;
+  name: string;
+  sessionId: string;
+  terminal: Terminal;
 }
 
 // Utility types

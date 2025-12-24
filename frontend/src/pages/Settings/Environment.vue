@@ -16,13 +16,7 @@ function goBack() {
         <h2 class="text-2xl font-bold">环境变量设置</h2>
         <p class="text-sm text-gray-500 mt-2">管理应用程序的环境变量</p>
       </div>
-      <button
-        type="button"
-        class="back-button"
-        @click="goBack"
-      >
-        返回
-      </button>
+      <button type="button" class="back-button" @click="goBack">返回</button>
     </div>
     <div class="settings-page-content">
       <EnvironmentVariables />
