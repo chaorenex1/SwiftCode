@@ -33,19 +33,9 @@
       "Bash(git init:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(npm run lint:all)",
-      "Bash(npm run lint)",
-      "Bash(npm run lint:fix:*)",
-      "Bash(npm run format:check)",
-      "Bash(npm run format)",
-      "Bash(npm run stylelint)",
-      "Bash(dir:*)",
-      "Bash(pnpm lint)",
-      "Bash(pnpm lint:fix)",
-      "Bash(powershell:*)",
-      "Bash(VITE_PORT=5175 pnpm dev)",
-      "Bash(mkdir:*)",
-      "Bash(git describe:*)"
+      "Bash(npx vue-tsc:*)",
+      "Skill(aduib-code-dev-workflows:project-architecture)",
+      "Bash(dir:*)"
     ]
   }
 }

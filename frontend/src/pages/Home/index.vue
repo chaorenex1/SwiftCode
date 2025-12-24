@@ -1,18 +1,18 @@
 <script setup lang="ts">
 import { Setting, Document, ChatDotRound, Promotion, Folder } from '@element-plus/icons-vue';
-import { ElButton, ElCard, ElDialog, ElMessage } from 'element-plus';
-import { ref, onMounted } from 'vue';
+import { ElButton, ElCard, ElDialog } from 'element-plus';
+import { ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
-
-import { addRecentDirectory, getRecentDirectories, type RecentDirectory } from '@/services/tauri/commands';
-import { useFileStore } from '@/stores/filesStore';
+import type { Workspace } from '@/utils/types';
+import { useFileStore, useAppStore } from '@/stores';
+import { showError } from '@/utils/toast';
 
 const router = useRouter();
 const fileStore = useFileStore();
+const appStore = useAppStore();
 
 const showDirectoryDialog = ref(false);
-const recentDirectories = ref<RecentDirectory[]>([]);
 const isLoading = ref(false);
 
 const features = [
@@ -51,9 +51,10 @@ async function selectDirectory() {
     if (result && typeof result === 'string') {
       // 加载目录
       await fileStore.loadDirectory(result);
+      fileStore.setRootDirectory(result);
 
-      // 保存到后端最近打开的目录
-      await saveRecentDirectory(result);
+      // 创建工作区
+      await appStore.createWorkspace(result, true);
 
       // 关闭对话框
       showDirectoryDialog.value = false;
@@ -65,7 +66,7 @@ async function selectDirectory() {
       showDirectoryDialog.value = false;
     }
   } catch (error) {
-    ElMessage.error('选择目录失败: ' + (error as Error).message);
+    showError('选择目录失败: ' + (error as Error).message);
     console.error('选择目录失败', error);
     showDirectoryDialog.value = false;
   } finally {
@@ -73,46 +74,20 @@ async function selectDirectory() {
   }
 }
 
-async function saveRecentDirectory(path: string) {
+async function openRecentDirectory(dir: Workspace) {
   try {
-    // 保存到后端数据库
-    await addRecentDirectory(path);
-
-    // 重新加载最近目录列表
-    await loadRecentDirectories();
-  } catch (error) {
-    console.error('保存最近目录失败', error);
-  }
-}
-
-async function loadRecentDirectories() {
-  try {
-    // 从后端获取最近目录
-    const directories = await getRecentDirectories();
-    recentDirectories.value = directories;
-  } catch (error) {
-    console.error('加载最近目录失败', error);
-    recentDirectories.value = [];
-  }
-}
-
-async function openRecentDirectory(dir: RecentDirectory) {
-  try {
+    console.debug('Opening recent directory:', dir);
     await fileStore.loadDirectory(dir.path);
-
-    // 更新最近打开时间
-    await addRecentDirectory(dir.path);
+    fileStore.setRootDirectory(dir.path);
+    // 创建工作区
+    await appStore.switchWorkspace(dir.id);
 
     router.push('/dashboard');
   } catch (error) {
-    ElMessage.error('打开目录失败: ' + (error as Error).message);
+    showError('打开目录失败: ' + (error as Error).message);
     console.error('打开目录失败', error);
   }
 }
-
-onMounted(() => {
-  loadRecentDirectories();
-});
 </script>
 
 <template>
@@ -129,11 +104,7 @@ onMounted(() => {
           您的智能代码开发助手，让编程更高效、更简单
         </p>
         <div class="flex justify-center gap-4">
-          <ElButton
-            type="primary"
-            size="large"
-            @click="startCoding"
-          >
+          <ElButton type="primary" size="large" @click="startCoding">
             <el-icon class="mr-2">
               <Promotion />
             </el-icon>
@@ -152,10 +123,7 @@ onMounted(() => {
         >
           <template #header>
             <div class="flex justify-center">
-              <el-icon
-                :size="40"
-                class="text-primary-500"
-              >
+              <el-icon :size="40" class="text-primary-500">
                 <component :is="feature.icon" />
               </el-icon>
             </div>
@@ -180,12 +148,7 @@ onMounted(() => {
           <p class="text-gray-600 dark:text-gray-400 mb-4">
             请选择一个目录作为您的工作区，AI助手将帮助您处理该目录中的文件。
           </p>
-          <ElButton
-            type="primary"
-            class="w-full"
-            :loading="isLoading"
-            @click="selectDirectory"
-          >
+          <ElButton type="primary" class="w-full" :loading="isLoading" @click="selectDirectory">
             <el-icon class="mr-2">
               <Folder />
             </el-icon>
@@ -195,19 +158,14 @@ onMounted(() => {
       </ElDialog>
 
       <!-- Recent Directories -->
-      <div
-        v-if="recentDirectories.length > 0"
-        class="mt-16 max-w-3xl mx-auto"
-      >
+      <div v-if="appStore.workspaces.length > 0" class="mt-16 max-w-3xl mx-auto">
         <ElCard>
           <template #header>
-            <h2 class="text-2xl font-bold text-center">
-              最近打开的目录
-            </h2>
+            <h2 class="text-2xl font-bold text-center">最近打开的目录</h2>
           </template>
           <div class="space-y-2">
             <div
-              v-for="(dir, index) in recentDirectories"
+              v-for="(dir, index) in useAppStore().workspaces"
               :key="index"
               class="flex items-center justify-between p-3 hover:bg-gray-50 dark:hover:bg-gray-800 rounded cursor-pointer"
               @click="openRecentDirectory(dir)"
@@ -221,7 +179,7 @@ onMounted(() => {
                     {{ dir.path }}
                   </div>
                   <div class="text-sm text-gray-500">
-                    {{ new Date(dir.openedAt).toLocaleString('zh-CN') }}
+                    {{ new Date(dir.createdAt).toLocaleString('zh-CN') }}
                   </div>
                 </div>
               </div>
@@ -237,9 +195,7 @@ onMounted(() => {
       <div class="mt-16 max-w-3xl mx-auto">
         <ElCard>
           <template #header>
-            <h2 class="text-2xl font-bold text-center">
-              快速开始
-            </h2>
+            <h2 class="text-2xl font-bold text-center">快速开始</h2>
           </template>
           <div class="space-y-4">
             <div class="flex items-start gap-4">
@@ -249,12 +205,8 @@ onMounted(() => {
                 1
               </div>
               <div>
-                <h4 class="font-semibold mb-1">
-                  选择工作目录
-                </h4>
-                <p class="text-gray-600 dark:text-gray-400">
-                  打开您的项目文件夹开始工作
-                </p>
+                <h4 class="font-semibold mb-1">选择工作目录</h4>
+                <p class="text-gray-600 dark:text-gray-400">打开您的项目文件夹开始工作</p>
               </div>
             </div>
             <div class="flex items-start gap-4">
@@ -264,12 +216,8 @@ onMounted(() => {
                 2
               </div>
               <div>
-                <h4 class="font-semibold mb-1">
-                  与 AI 对话
-                </h4>
-                <p class="text-gray-600 dark:text-gray-400">
-                  描述您的需求，AI 将帮助您生成代码
-                </p>
+                <h4 class="font-semibold mb-1">与 AI 对话</h4>
+                <p class="text-gray-600 dark:text-gray-400">描述您的需求，AI 将帮助您生成代码</p>
               </div>
             </div>
             <div class="flex items-start gap-4">
@@ -279,12 +227,8 @@ onMounted(() => {
                 3
               </div>
               <div>
-                <h4 class="font-semibold mb-1">
-                  编辑和运行
-                </h4>
-                <p class="text-gray-600 dark:text-gray-400">
-                  在编辑器中修改代码并在终端中运行
-                </p>
+                <h4 class="font-semibold mb-1">编辑和运行</h4>
+                <p class="text-gray-600 dark:text-gray-400">在编辑器中修改代码并在终端中运行</p>
               </div>
             </div>
           </div>

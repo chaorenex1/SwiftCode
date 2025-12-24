@@ -2,6 +2,8 @@
 
 pub mod commands;
 pub mod event_handlers;
-
-pub use event_handlers::emit_ai_response;
-
+pub mod settings_commands;
+pub mod workspace_command;
+pub mod fs_command;
+pub mod chat_session_commands;
+pub mod notification_commands;

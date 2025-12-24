@@ -1,6 +1,5 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-
 import type { User, UserPreferences, AuthState } from '@/utils/types';
 
 export const useUserStore = defineStore('user', () => {
@@ -53,20 +52,20 @@ export const useUserStore = defineStore('user', () => {
       authState.value = 'loading';
       // TODO: Implement actual login logic with backend
       // For now, simulate login
+      console.log('Logging in with email:', email);
+      console.log('Logging in with password:', password);
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
       const user: User = {
         id: crypto.randomUUID(),
         email,
-        name: email.split('@')[0] ?? email,
+        name: email.split('@')[0] || '',
+        role: 'user',
         avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(email)}&background=random`,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         lastLoginAt: new Date().toISOString(),
       };
-
-      // Mark password as intentionally unused for now
-      void password;
 
       setUser(user);
       authState.value = 'authenticated';
@@ -84,9 +83,7 @@ export const useUserStore = defineStore('user', () => {
   };
 
   const updateProfile = async (updates: Partial<User>): Promise<boolean> => {
-    if (!currentUser.value) {
-      return false;
-    }
+    if (!currentUser.value) return false;
 
     try {
       authState.value = 'loading';
@@ -178,9 +175,7 @@ export const useUserStore = defineStore('user', () => {
 
   // Computed
   const userInitials = computed(() => {
-    if (!currentUser.value?.name) {
-      return '';
-    }
+    if (!currentUser.value?.name) return '';
     return currentUser.value.name
       .split(' ')
       .map((word) => word[0])
