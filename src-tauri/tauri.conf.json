@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "Code AI Assistant",
-  "version": "1.0.1",
+  "version": "1.0.3",
   "identifier": "codeai-assistant",
   "build": {
     "beforeDevCommand": "pnpm dev",
@@ -70,7 +70,7 @@
     "updater": {
       "active": true,
       "dialog": true,
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZDM0FFQjhERTlGNDE2RjgKUldUNEZ2VHBqZXM2YkVpRjFuYVdDTEIrTDZUcnhkc040ZVRuR3JQMGtFamwzWVArd25tWlF3eWgK",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEI5RTI2MTMyNDkzODA0MUYKUldRZkJEaEpNbUhpdVlzS2hKY1N2UHZBc0xHZ2F4SS85WlAvcTVKMFA1YXk0TXVhNDBGdC83aEcK",
       "windows": {
           "installMode": "passive"
         }
